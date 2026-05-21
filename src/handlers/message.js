@@ -136,14 +136,16 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   const minutosDelDia = hourVE * 60 + minuteVE;
 
   // 2. Determinar el bloque activo según la hora de recepción del mensaje
-  // Corte 1 (9am): 540 min. Corte 2 (2pm): 840 min. Corte 3 (6pm): 1080 min.
+  // Bloque 1 (9am): desde 7:00 AM (420 min) hasta 9:00 AM (540 min).
+  // Bloque 2 (2pm): desde 9:01 AM (540 min) hasta 2:00 PM (840 min).
+  // Bloque 3 (6pm): desde 2:01 PM (840 min) hasta 6:59 AM (420 min) del día siguiente.
   let bloqueActivo;
-  if (minutosDelDia > 540 && minutosDelDia <= 840) {
+  if (minutosDelDia >= 420 && minutosDelDia <= 540) {
+    bloqueActivo = 1; // Bloque 1 (9am) cursando
+  } else if (minutosDelDia > 540 && minutosDelDia <= 840) {
     bloqueActivo = 2; // Bloque 2 (2pm) cursando
-  } else if (minutosDelDia > 840 && minutosDelDia <= 1080) {
-    bloqueActivo = 3; // Bloque 3 (6pm) cursando
   } else {
-    bloqueActivo = 1; // Bloque 1 (9am) cursando (después de 6pm y hasta las 9am del día siguiente)
+    bloqueActivo = 3; // Bloque 3 (6pm) cursando (desde las 2:01 PM hasta las 6:59 AM del día siguiente)
   }
 
   const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
