@@ -97,10 +97,29 @@ async function manejarEliminacion(ctx, messageId) {
  */
 async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   const { municipio, nodo, totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
-  const { fecha, hora } = tiempo;
 
   const mensajeObj = ctx.message || ctx.editedMessage;
-  const timestamp = mensajeObj?.date || Math.floor(Date.now() / 1000);
+  const esEdicion = !!ctx.editedMessage;
+  const creationTimestamp = mensajeObj?.date || Math.floor(Date.now() / 1000);
+  const editTimestamp = mensajeObj?.edit_date || creationTimestamp;
+
+  let timestamp = creationTimestamp;
+  let tiempoFinal = tiempo;
+
+  if (esEdicion) {
+    const diffMins = (editTimestamp - creationTimestamp) / 60;
+    const holgura = config.app.reportEditGracePeriodMins;
+
+    if (diffMins > holgura) {
+      console.log(`[INFO] Reporte editado después de la holgura (${Math.round(diffMins)} min > ${holgura} min). Usando fecha de edición para el bloque.`);
+      timestamp = editTimestamp;
+      tiempoFinal = convertirTimestamp(timestamp);
+    } else {
+      console.log(`[INFO] Reporte editado dentro de la holgura (${Math.round(diffMins)} min <= ${holgura} min). Usando fecha de creación original.`);
+    }
+  }
+
+  const { fecha, hora } = tiempoFinal;
 
   // 1. Obtener la hora y minuto del mensaje en hora local de Venezuela (VET)
   const dateVE = new Date(timestamp * 1000);
@@ -129,7 +148,7 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
 
   const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
   const bloqueStr = bloqueActivo === 1 ? "9am" : bloqueActivo === 2 ? "2pm" : "6pm";
-  console.log(`[INFO] Mensaje enviado/creado a las ${horaStr} (Hora VE). Bloque Activo: ${bloqueStr}.`);
+  console.log(`[INFO] Mensaje procesado a las ${horaStr} (Hora VE). Bloque Activo: ${bloqueStr}.`);
 
   const doc  = await obtenerHojaDeCalculo();
   const hoja = doc.sheetsByIndex[0];
