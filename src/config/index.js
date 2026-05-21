@@ -38,7 +38,7 @@ export const config = {
     // Horas de corte de reporte en hora local Venezuela (9am, 2pm, 6pm)
     cutoffHours: [9, 14, 18],
     // Tiempo de holgura en minutos para poder corregir un reporte en el mismo bloque
-    reportEditGracePeriodMins: parseInt(process.env.REPORT_EDIT_GRACE_PERIOD_MINS, 10) || 60,
+    reportEditGracePeriodMins: parseInt(process.env.REPORT_EDIT_GRACE_PERIOD_MINS, 10) || 10,
     // Intervalo de limpieza periódica en milisegundos (5 minutos)
     cleanupIntervalMs: 5 * 60 * 1000,
     // Retardo inicial antes de la primera limpieza al arrancar (segundos)
