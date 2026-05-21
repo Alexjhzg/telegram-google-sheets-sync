@@ -1,0 +1,29 @@
+# ── Dependencias (se reinstalan dentro del contenedor) ────────
+node_modules/
+
+# ── Variables de entorno (NUNCA deben entrar a la imagen) ─────
+.env
+.env.*
+!.env.example
+
+# ── Control de versiones ──────────────────────────────────────
+.git/
+.gitignore
+
+# ── Logs de npm ──────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── El propio Dockerfile y docker-compose ─────────────────────
+Dockerfile
+docker-compose.yml
+
+# ── Archivos del sistema operativo ───────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Herramientas de desarrollo ────────────────────────────────
+.vscode/
+.idea/
+*.md

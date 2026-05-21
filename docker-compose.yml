@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────────────────────────
+# docker-compose.yml — Bot de Telegram para supervisión en campo
+# Uso: docker compose up -d --build
+# ──────────────────────────────────────────────────────────────
+
+services:
+
+  telegram-bot:
+    # ── Construcción de la imagen desde el Dockerfile local ───
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # ── Nombre del contenedor para identificarlo fácilmente ───
+    container_name: bot-supervision-campo
+
+    # ── Política de reinicio: se reactiva ante fallos, pero no
+    #    si el contenedor fue detenido manualmente con `docker stop`
+    restart: unless-stopped
+
+    # ── Variables de entorno cargadas desde el archivo .env ───
+    # El archivo .env NO se copia a la imagen; se inyecta en tiempo
+    # de ejecución para mantener las credenciales fuera de la imagen.
+    env_file:
+      - .env
+
+    # ── Configuración de logging ──────────────────────────────
+    # Limita el tamaño de los logs para evitar llenar el disco en producción.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   # Máximo 10 MB por archivo de log
+        max-file: "5"     # Rotar y conservar hasta 5 archivos históricos
+
+    # ── Señal de parada limpia ────────────────────────────────
+    # Permite que grammy finalice el long-polling correctamente.
+    stop_signal: SIGTERM
+    stop_grace_period: 15s
