@@ -43,6 +43,22 @@ graph TD
 
 ---
 
+## 💡 Retos de Ingeniería y Soluciones Implementadas
+
+### 1. El Desafío de la Mutación en Lotes (Evitando el Desfase de Índices)
+* **Problema:** Al consultar la API de Google Sheets y recorrer las filas secuencialmente para eliminar registros obsoletos (mensajes borrados), cada borrado altera la posición física de las filas subsiguientes (Index Shifting). Esto corrompe las referencias del bucle, omitiendo filas o intentando borrar datos incorrectos.
+* **Solución:** Implementación de un **algoritmo de recorrido y eliminación en orden inverso** (`filas.length - 1` hasta `0`). Al eliminar de abajo hacia arriba, las filas modificadas hacia adelante no afectan la numeración de los índices que aún faltan por analizar, garantizando transacciones seguras.
+
+### 2. Resiliencia de API y Mitigación de Rate Limiting
+* **Problema:** La validación masiva en lotes de mensajes de Telegram puede provocar bloqueos temporales por parte del servidor por abuso de cuota (HTTP 429 - Too Many Requests).
+* **Solución:** Desarrollo de una cola de procesamiento asíncrona no bloqueante que introduce un delay dinámico configurable (`cleanupRequestDelayMs: 100`) entre consultas de API, regulando el tráfico y respetando el *rate limit* de Telegram.
+
+### 3. Manejo de Errores e Integridad del Estado
+* **Problema:** Errores transitorios de red o llamadas de API no destructivas sin estado (como verificar reacciones ausentes) llenaban los logs del servidor de ruido e inducían falsas detecciones de borrado.
+* **Solución:** Implementación de un discriminador de excepciones. El bot reconoce el código `MESSAGE_ID_INVALID` como señal ineludible de eliminación permanente, mientras que maneja silenciosamente códigos inocuos como `REACTION_EMPTY`, aislando fallos de conexión para evitar la pérdida accidental de datos.
+
+---
+
 ## ⚙️ Configuración del Entorno (`.env`)
 
 Crea un archivo `.env` en la raíz del proyecto basándote en `.env.example`:
@@ -93,34 +109,28 @@ npm start
 
 ---
 
-## 🗂️ Estructura del Código
+## 🗂️ Estructura del Código y Patrones de Diseño
+
+El código sigue el principio de **Separación de Responsabilidades (Separation of Concerns)**:
 
 ```bash
-├── bot.js                  # Punto de entrada principal de la aplicación
-├── Dockerfile              # Configuración de Docker para node:20-alpine
+├── bot.js                  # Punto de entrada y Bootstrap de la aplicación
+├── Dockerfile              # Configuración de Docker de producción para node:20-alpine
 ├── docker-compose.yml      # Orquestación de servicios en Docker
-├── package.json            # Dependencias del proyecto (Grammy, Google-Spreadsheet, Croner)
+├── package.json            # Dependencias del proyecto
 ├── src/
 │   ├── config/
-│   │   └── index.js        # Configuración centralizada y variables de entorno
+│   │   └── index.js        # Configuración centralizada y tipado/normalización de variables de entorno
 │   ├── handlers/
-│   │   └── message.js      # Middleware de recepción y parseo de mensajes
+│   │   └── message.js      # Capa controladora: Middleware recepctor y enrutador de mensajes
 │   ├── jobs/
-│   │   └── cleanup.js      # Worker de limpieza planificada con Croner
+│   │   └── cleanup.js      # Capa del worker: Proceso de reconciliación asíncrono con Croner
 │   ├── services/
-│   │   └── sheets.js       # Integración con Google Sheets API (JWT Auth)
+│   │   └── sheets.js       # Capa de infraestructura: Conexión y operaciones de Google Sheets API
 │   └── utils/
-│       └── parser.js       # Expresiones regulares para extracción de datos
-└── .gitignore              # Archivo de exclusión de Git (Seguridad de credenciales)
+│       └── parser.js       # Capa de utilidades: Funciones puras con regex para parseo de texto
+└── .gitignore              # Seguridad del repositorio frente a fugas de configuración
 ```
-
----
-
-## 🧹 Detalles del Job de Limpieza
-El proceso de limpieza implementa medidas de alta resiliencia:
-1. **Recorrido Inverso:** Para evitar el desplazamiento de índices al eliminar filas físicas de Google Sheets, el bucle procesa los registros desde el final hasta el principio (`filas.length - 1` hasta `0`).
-2. **Mitigación de Rate Limit:** El bot añade un retardo de `100ms` entre la comprobación de cada fila para evitar bloqueos por parte de los servidores de Telegram.
-3. **Manejo de Errores de API:** Se ignoran fallos menores (como reacciones ausentes `REACTION_EMPTY`) y se trata la clave de error `MESSAGE_ID_INVALID` como indicación absoluta de mensaje eliminado.
 
 ---
 
