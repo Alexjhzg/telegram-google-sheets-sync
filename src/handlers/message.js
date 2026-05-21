@@ -99,6 +99,38 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   const { municipio, nodo, totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
   const { fecha, hora } = tiempo;
 
+  const mensajeObj = ctx.message || ctx.editedMessage;
+  const timestamp = mensajeObj?.date || Math.floor(Date.now() / 1000);
+
+  // 1. Obtener la hora y minuto del mensaje en hora local de Venezuela (VET)
+  const dateVE = new Date(timestamp * 1000);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Caracas",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(dateVE);
+  const hourVE = parseInt(parts.find((p) => p.type === "hour").value, 10);
+  const minuteVE = parseInt(parts.find((p) => p.type === "minute").value, 10);
+
+  const minutosDelDia = hourVE * 60 + minuteVE;
+
+  // 2. Determinar el bloque activo según la hora de recepción del mensaje
+  // Corte 1 (9am): 540 min. Corte 2 (2pm): 840 min. Corte 3 (6pm): 1080 min.
+  let bloqueActivo;
+  if (minutosDelDia > 540 && minutosDelDia <= 840) {
+    bloqueActivo = 2; // Bloque 2 (2pm) cursando
+  } else if (minutosDelDia > 840 && minutosDelDia <= 1080) {
+    bloqueActivo = 3; // Bloque 3 (6pm) cursando
+  } else {
+    bloqueActivo = 1; // Bloque 1 (9am) cursando (después de 6pm y hasta las 9am del día siguiente)
+  }
+
+  const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
+  const bloqueStr = bloqueActivo === 1 ? "9am" : bloqueActivo === 2 ? "2pm" : "6pm";
+  console.log(`[INFO] Mensaje enviado/creado a las ${horaStr} (Hora VE). Bloque Activo: ${bloqueStr}.`);
+
   const doc  = await obtenerHojaDeCalculo();
   const hoja = doc.sheetsByIndex[0];
   await asegurarColumnas(hoja);
@@ -107,16 +139,25 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   const filaExistente = buscarFilaPorMensaje(filas, messageId);
   const historial    = obtenerUltimosValores(filas, municipio, nodo, filaExistente);
 
-  // Preservar valores históricos si el nuevo reporte trae 0
-  const totalFinal = totalVerificadores || historial.total;
-  const b1Final    = bloque1 || historial.b1;
-  const b2Final    = bloque2 || historial.b2;
-  const b3Final    = bloque3 || historial.b3;
+  // 3. Extraer el valor numérico único reportado (de los bloques o del total)
+  const valorReportado = bloque1 || bloque2 || bloque3 || totalVerificadores || 0;
 
-  if (totalFinal !== totalVerificadores) console.log(`[INFO] Preservando Total Verificadores anterior: ${historial.total}`);
-  if (b1Final    !== bloque1)            console.log(`[INFO] Preservando Bloque 1 (9am) anterior: ${historial.b1}`);
-  if (b2Final    !== bloque2)            console.log(`[INFO] Preservando Bloque 2 (2pm) anterior: ${historial.b2}`);
-  if (b3Final    !== bloque3)            console.log(`[INFO] Preservando Bloque 3 (6pm) anterior: ${historial.b3}`);
+  // 4. Asignar el valor reportado al bloque activo y preservar los históricos en los otros bloques
+  let b1Final = historial.b1;
+  let b2Final = historial.b2;
+  let b3Final = historial.b3;
+  const totalFinal = totalVerificadores || historial.total;
+
+  if (bloqueActivo === 1) {
+    b1Final = valorReportado || historial.b1;
+    console.log(`[INFO] Valor reportado asignado a Bloque 1 (9am): ${b1Final}`);
+  } else if (bloqueActivo === 2) {
+    b2Final = valorReportado || historial.b2;
+    console.log(`[INFO] Valor reportado asignado a Bloque 2 (2pm): ${b2Final}`);
+  } else if (bloqueActivo === 3) {
+    b3Final = valorReportado || historial.b3;
+    console.log(`[INFO] Valor reportado asignado a Bloque 3 (6pm): ${b3Final}`);
+  }
 
   const datos = {
     [COLUMNAS.MUNICIPIO]:           municipio.trim(),
