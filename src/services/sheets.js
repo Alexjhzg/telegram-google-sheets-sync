@@ -17,6 +17,7 @@ export const COLUMNAS = {
   REMITENTE:          "Remitente",
   ID_MENSAJE:         "ID Mensaje",
   ID_CHAT:            "ID Chat",
+  ESTADO:             "Estado",
 };
 
 /**
@@ -81,7 +82,7 @@ export function buscarFilaPorMensaje(filas, messageId) {
  * @param {import("google-spreadsheet").GoogleSpreadsheetRow | null} filaExcluida
  * @returns {{ total: number, b1: number, b2: number, b3: number }}
  */
-export function obtenerUltimosValores(filas, municipio, nodo, filaExcluida = null) {
+export function obtenerUltimosValores(filas, municipio, nodo, fechaActual, filaExcluida = null) {
   let total = 0, b1 = 0, b2 = 0, b3 = 0;
 
   for (let i = filas.length - 1; i >= 0; i--) {
@@ -90,8 +91,10 @@ export function obtenerUltimosValores(filas, municipio, nodo, filaExcluida = nul
     const obj     = filas[i].toObject();
     const munFila = (obj[COLUMNAS.MUNICIPIO] || "").trim().toLowerCase();
     const nodoFila = parseInt(obj[COLUMNAS.NODO], 10);
+    const fechaFila = obj[COLUMNAS.FECHA] || "";
 
     if (munFila !== municipio.trim().toLowerCase() || nodoFila !== nodo) continue;
+    if (fechaFila !== fechaActual) continue; // ¡Solo del mismo día!
 
     if (!total) total = parseInt(obj[COLUMNAS.TOTAL_VERIFICADORES] || "0", 10);
     if (!b1)    b1    = parseInt(obj[COLUMNAS.BLOQUE_1] || "0", 10);

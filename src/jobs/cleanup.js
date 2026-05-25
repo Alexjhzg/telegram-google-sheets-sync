@@ -15,28 +15,34 @@ import { obtenerHojaDeCalculo, COLUMNAS } from "../services/sheets.js";
  */
 async function mensajeExiste(api, chatId, messageId) {
   try {
-    await api.setMessageReaction(chatId, messageId, []);
-    return true;
+    // Intentamos editar el markup del mensaje con una lista vacía.
+    // Como el mensaje fue enviado por un usuario (y no por el bot), si el mensaje existe
+    // esta llamada FALLARÁ inmediatamente con el error "message can't be edited" (o "message is not modified").
+    // Si el mensaje NO existe (fue borrado), fallará con "message to edit not found".
+    // Esto nos permite verificar la existencia de forma 100% silenciosa sin alterar reacciones ni animaciones.
+    await api.editMessageReplyMarkup(chatId, messageId, { reply_markup: { inline_keyboard: [] } });
+    return true; // Si por alguna razón tiene éxito, el mensaje existe.
   } catch (error) {
     const desc = (error.description || "").toLowerCase();
 
-    // Si el mensaje fue borrado o no existe, Telegram devuelve MESSAGE_ID_INVALID o message not found
+    // Si el mensaje fue borrado o no existe en el servidor
     if (
+      desc.includes("message to edit not found") ||
       desc.includes("message_id_invalid") ||
-      desc.includes("message to react not found") ||
       desc.includes("message not found")
     ) {
       return false;
     }
 
-    // REACTION_EMPTY significa que el mensaje SÍ existe, pero intentamos limpiar una reacción
-    // que no estaba puesta. Lo tratamos como éxito silencioso para no llenar los logs de advertencias.
-    if (desc.includes("reaction_empty")) {
+    // Si el mensaje SÍ existe pero no tenemos permisos de edición (comportamiento esperado)
+    if (
+      desc.includes("message can't be edited") ||
+      desc.includes("message is not modified")
+    ) {
       return true;
     }
 
-    // Otro tipo de error (permisos, rate-limit…): asumir que el mensaje existe
-    // para no borrar datos válidos por error.
+    // Otro tipo de error (permisos, rate-limit…): asumir que el mensaje existe para no borrar datos válidos por error.
     console.warn(`[ADVERTENCIA] No se pudo verificar Mensaje ID ${messageId} en Chat ${chatId}: ${error.message}`);
     return true;
   }
@@ -56,6 +62,8 @@ export async function ejecutarLimpieza(api) {
     const filas = await hoja.getRows();
 
     let eliminados = 0;
+    let analizados = 0;
+    const MAX_FILAS_ANALIZAR = 40; // Limitar análisis a las 40 filas más recientes para evitar saturación de la API
 
     // Iteramos en orden inverso (de abajo hacia arriba) para evitar que el desfase de
     // índices en Google Sheets afecte a las filas restantes al eliminar registros en bucle.
@@ -68,10 +76,37 @@ export async function ejecutarLimpieza(api) {
       // Saltar filas que aún no tienen los campos de rastreo
       if (isNaN(messageId) || isNaN(chatId)) continue;
 
-      const existe = await mensajeExiste(api, chatId, messageId);
+      analizados++;
+      if (analizados > MAX_FILAS_ANALIZAR) {
+        console.log(`[INFO] Se alcanzó el límite de seguridad de ${MAX_FILAS_ANALIZAR} filas analizadas. Finalizando escaneo.`);
+        break;
+      }
 
-      if (!existe) {
-        console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Borrando fila...`);
+      // Verificar si la fila está en revisión y ha superado el tiempo de gracia de 5 minutos
+      const estado = obj[COLUMNAS.ESTADO] || "";
+      let debeBorrarsePorRevision = false;
+
+      if (estado.startsWith("Revisión desde:")) {
+        const timestampStr = estado.replace("Revisión desde:", "").trim();
+        const timestampRevision = new Date(timestampStr).getTime();
+        if (!isNaN(timestampRevision)) {
+          const ahora = Date.now();
+          const transcurridoMins = (ahora - timestampRevision) / 1000 / 60;
+          if (transcurridoMins >= 5) {
+            console.log(`[INFO] Fila en REVISIÓN superó el tiempo de gracia de 5 min (${Math.round(transcurridoMins)} min). Se procederá a borrar.`);
+            debeBorrarsePorRevision = true;
+          }
+        }
+      }
+
+      const existe = debeBorrarsePorRevision ? false : await mensajeExiste(api, chatId, messageId);
+
+      if (!existe || debeBorrarsePorRevision) {
+        if (!existe && !debeBorrarsePorRevision) {
+          console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Borrando fila...`);
+        } else if (debeBorrarsePorRevision) {
+          console.log(`[INFO] Reporte inválido editado superó tiempo de revisión (Mensaje ID: ${messageId}). Borrando fila...`);
+        }
         await fila.delete();
         eliminados++;
       }

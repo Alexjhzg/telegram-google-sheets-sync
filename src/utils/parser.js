@@ -58,3 +58,39 @@ export function convertirTimestamp(timestamp) {
     hora:  fecha.toLocaleTimeString("es-VE", { ...opts, hour: "2-digit", minute: "2-digit", second: "2-digit" }),
   };
 }
+
+/**
+ * Obtiene la hora de Venezuela (VET) y determina el bloque activo (1, 2 o 3) para un timestamp.
+ *
+ * @param {number} timestamp - Unix timestamp en segundos.
+ * @returns {{ horaStr: string, bloqueActivo: number, bloqueStr: string, minutosDelDia: number }}
+ */
+export function obtenerBloqueYHoraActivo(timestamp) {
+  const dateVE = new Date(timestamp * 1000);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: config.app.timezone,
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(dateVE);
+  const hourVE = parseInt(parts.find((p) => p.type === "hour").value, 10);
+  const minuteVE = parseInt(parts.find((p) => p.type === "minute").value, 10);
+
+  const minutosDelDia = hourVE * 60 + minuteVE;
+
+  // Determinar bloque activo
+  let bloqueActivo;
+  if (minutosDelDia >= 420 && minutosDelDia <= 540) {
+    bloqueActivo = 1; // 9am
+  } else if (minutosDelDia > 540 && minutosDelDia <= 840) {
+    bloqueActivo = 2; // 2pm
+  } else {
+    bloqueActivo = 3; // 6pm
+  }
+
+  const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
+  const bloqueStr = bloqueActivo === 1 ? "9am" : bloqueActivo === 2 ? "2pm" : "6pm";
+
+  return { horaStr, bloqueActivo, bloqueStr, minutosDelDia };
+}

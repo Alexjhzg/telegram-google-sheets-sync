@@ -1,7 +1,10 @@
 "use strict";
 
 import { config } from "../config/index.js";
-import { parsearReporte, convertirTimestamp } from "../utils/parser.js";
+import { parsearReporte, convertirTimestamp, obtenerBloqueYHoraActivo } from "../utils/parser.js";
+import { obtenerNombreRemitente, reaccionar } from "../utils/telegram.js";
+import { validarMunicipioNodo } from "../services/validation.js";
+import { calcularAcumulacion } from "../utils/accumulation.js";
 import {
   obtenerHojaDeCalculo,
   asegurarColumnas,
@@ -12,52 +15,6 @@ import {
 
 // Regex que detecta si un mensaje contiene una solicitud de eliminación manual
 const REGEX_ELIMINAR = /\b(?:eliminar|borrar|eliminado|borrado)\b/i;
-
-/**
- * Obtiene el nombre del remitente de forma legible.
- *
- * Caso especial: cuando un admin publica de forma anónima en un grupo,
- * Telegram usa el bot "GroupAnonymousBot" (ID 1087968824) como remitente.
- * En ese caso intentamos usar la firma del autor (author_signature) o
- * el título del chat como identificador alternativo.
- *
- * @param {import("grammy").Context} ctx
- * @returns {string}
- */
-function obtenerNombreRemitente(ctx) {
-  const from = ctx.from;
-
-  // Admin anónimo de grupo (GroupAnonymousBot)
-  if (from?.id === 1087968824) {
-    const mensajeObj = ctx.message || ctx.editedMessage;
-    // author_signature: nombre que pone el admin cuando publica anónimamente
-    if (mensajeObj?.author_signature) return mensajeObj.author_signature;
-    // Fallback: título del grupo con etiqueta
-    const titulo = ctx.chat?.title;
-    return titulo ? `Admin de ${titulo}` : "Admin Anónimo";
-  }
-
-  return (
-    [from?.first_name, from?.last_name].filter(Boolean).join(" ") ||
-    from?.username ||
-    "Desconocido"
-  );
-}
-
-
-/**
- * Intenta agregar una reacción al mensaje, sin lanzar error si el chat
- * no permite reacciones (REACTION_INVALID u otros).
- * @param {import("grammy").Context} ctx
- * @param {string} emoji
- */
-async function reaccionar(ctx, emoji) {
-  try {
-    await ctx.react(emoji);
-  } catch {
-    // Las reacciones son opcionales — si el grupo las tiene restringidas, se ignora.
-  }
-}
 
 /**
  * Maneja la solicitud de eliminación de un registro desde Telegram.
@@ -76,12 +33,36 @@ async function manejarEliminacion(ctx, messageId) {
     if (fila) {
       await fila.delete();
       console.log(`[INFO] Fila eliminada de Google Sheets (Mensaje ID: ${messageId}).`);
-      await reaccionar(ctx, "🗑️");
     } else {
       console.warn(`[ADVERTENCIA] No se encontró fila con Mensaje ID: ${messageId} para eliminar.`);
     }
   } catch (error) {
     console.error("[ERROR] No se pudo eliminar el registro de Google Sheets:", error);
+  }
+}
+
+/**
+ * Marca una fila en Google Sheets en estado de revisión si el reporte editado es inválido.
+ * @param {object} [doc] - Instancia de GoogleSpreadsheet ya cargada (opcional).
+ * @param {number|string} messageId
+ */
+async function marcarFilaParaRevision(doc, messageId) {
+  try {
+    const documento = doc || await obtenerHojaDeCalculo();
+    const hoja = documento.sheetsByIndex[0];
+    const filas = await hoja.getRows();
+    const fila = buscarFilaPorMensaje(filas, messageId);
+    if (fila) {
+      const estadoActual = fila.get(COLUMNAS.ESTADO) || "";
+      if (!estadoActual.startsWith("Revisión desde:")) {
+        const ahoraIso = new Date().toISOString();
+        fila.set(COLUMNAS.ESTADO, `Revisión desde: ${ahoraIso}`);
+        await fila.save();
+        console.log(`[INFO] Fila marcada para revisión (Mensaje ID: ${messageId}).`);
+      }
+    }
+  } catch (error) {
+    console.error("[ERROR] No se pudo marcar la fila para revisión:", error);
   }
 }
 
@@ -121,67 +102,106 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
 
   const { fecha, hora } = tiempoFinal;
 
-  // 1. Obtener la hora y minuto del mensaje en hora local de Venezuela (VET)
-  const dateVE = new Date(timestamp * 1000);
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Caracas",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(dateVE);
-  const hourVE = parseInt(parts.find((p) => p.type === "hour").value, 10);
-  const minuteVE = parseInt(parts.find((p) => p.type === "minute").value, 10);
-
-  const minutosDelDia = hourVE * 60 + minuteVE;
-
-  // 2. Determinar el bloque activo según la hora de recepción del mensaje
-  // Bloque 1 (9am): desde 7:00 AM (420 min) hasta 9:00 AM (540 min).
-  // Bloque 2 (2pm): desde 9:01 AM (540 min) hasta 2:00 PM (840 min).
-  // Bloque 3 (6pm): desde 2:01 PM (840 min) hasta 6:59 AM (420 min) del día siguiente.
-  let bloqueActivo;
-  if (minutosDelDia >= 420 && minutosDelDia <= 540) {
-    bloqueActivo = 1; // Bloque 1 (9am) cursando
-  } else if (minutosDelDia > 540 && minutosDelDia <= 840) {
-    bloqueActivo = 2; // Bloque 2 (2pm) cursando
-  } else {
-    bloqueActivo = 3; // Bloque 3 (6pm) cursando (desde las 2:01 PM hasta las 6:59 AM del día siguiente)
-  }
-
-  const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
-  const bloqueStr = bloqueActivo === 1 ? "9am" : bloqueActivo === 2 ? "2pm" : "6pm";
+  // 1. Obtener la hora y bloque activo en hora de Venezuela
+  const { horaStr, bloqueActivo, bloqueStr } = obtenerBloqueYHoraActivo(timestamp);
   console.log(`[INFO] Mensaje procesado a las ${horaStr} (Hora VE). Bloque Activo: ${bloqueStr}.`);
 
-  const doc  = await obtenerHojaDeCalculo();
+  const doc = await obtenerHojaDeCalculo();
+
+  // 2. Validar Municipio y Nodo contra catálogo oficial (verificadores_nodo)
+  const { valido, limiteVerificadores, municipioOficial } = await validarMunicipioNodo(doc, municipio, nodo);
+  if (!valido) {
+    console.warn(
+      `\n┌── ⚠️ VALIDACIÓN FALLIDA ───────────────────────────────┐` +
+      `\n│ Municipio y/o Nodo inválidos. El reporte no existe en  │` +
+      `\n│ la base de datos oficial.                              │` +
+      `\n│    • Municipio parsed:   ${municipio}` +
+      `\n│    • Nodo parsed:        ${nodo}` +
+      `\n└────────────────────────────────────────────────────────┘\n`
+    );
+    if (esEdicion) {
+      await marcarFilaParaRevision(doc, messageId);
+    }
+    await reaccionar(ctx, "👎");
+    return;
+  }
+
+  // 3. Cargar hoja principal e historial del mismo día
   const hoja = doc.sheetsByIndex[0];
   await asegurarColumnas(hoja);
 
-  const filas        = await hoja.getRows();
-  const filaExistente = buscarFilaPorMensaje(filas, messageId);
-  const historial    = obtenerUltimosValores(filas, municipio, nodo, filaExistente);
+  const filas = await hoja.getRows();
 
-  // 3. Extraer el valor numérico único reportado (de los bloques o del total)
-  const valorReportado = bloque1 || bloque2 || bloque3 || totalVerificadores || 0;
+  // Buscar si ya existe un reporte para esta combinación de municipio+nodo hoy
+  const filaExistente = filas.find(fila => {
+    const mun = (fila.get(COLUMNAS.MUNICIPIO) || "").trim().toLowerCase();
+    const nod = parseInt(fila.get(COLUMNAS.NODO) || "0", 10);
+    const fec = (fila.get(COLUMNAS.FECHA) || "").trim();
+    return mun === municipioOficial.toLowerCase() && nod === nodo && fec === fecha;
+  }) || null;
 
-  // 4. Asignar el valor reportado al bloque activo y preservar los históricos en los otros bloques
-  let b1Final = historial.b1;
-  let b2Final = historial.b2;
-  let b3Final = historial.b3;
-  const totalFinal = totalVerificadores || historial.total;
+  // Si ya existe una fila para hoy, el historial son sus valores actuales
+  const historial = filaExistente ? {
+    b1: parseInt(filaExistente.get(COLUMNAS.BLOQUE_1) || "0", 10),
+    b2: parseInt(filaExistente.get(COLUMNAS.BLOQUE_2) || "0", 10),
+    b3: parseInt(filaExistente.get(COLUMNAS.BLOQUE_3) || "0", 10),
+    total: parseInt(filaExistente.get(COLUMNAS.TOTAL_VERIFICADORES) || "0", 10)
+  } : { b1: 0, b2: 0, b3: 0, total: 0 };
 
-  if (bloqueActivo === 1) {
-    b1Final = valorReportado || historial.b1;
-    console.log(`[INFO] Valor reportado asignado a Bloque 1 (9am): ${b1Final}`);
-  } else if (bloqueActivo === 2) {
-    b2Final = valorReportado || historial.b2;
-    console.log(`[INFO] Valor reportado asignado a Bloque 2 (2pm): ${b2Final}`);
-  } else if (bloqueActivo === 3) {
-    b3Final = valorReportado || historial.b3;
-    console.log(`[INFO] Valor reportado asignado a Bloque 3 (6pm): ${b3Final}`);
+  // 4. Calcular la acumulación de verificadores por bloque e histórico del mismo día
+  const { b1Final, b2Final, b3Final } = calcularAcumulacion(bloqueActivo, reporte, historial);
+
+  const totalFinal = Math.max(totalVerificadores || 0, b1Final, b2Final, b3Final);
+
+  // 6. Validar capacidad máxima de verificadores permitida
+  if (totalFinal > limiteVerificadores) {
+    console.warn(
+      `\n┌── ⚠️ VALIDACIÓN FALLIDA ───────────────────────────────┐` +
+      `\n│ Exceso de verificadores en nodo.                      │` +
+      `\n│    • Municipio:          ${municipioOficial}` +
+      `\n│    • Nodo:               ${nodo}` +
+      `\n│    • Reportados:         ${totalFinal}` +
+      `\n│    • Límite Permitido:   ${limiteVerificadores}` +
+      `\n└────────────────────────────────────────────────────────┘\n`
+    );
+    if (esEdicion) {
+      await marcarFilaParaRevision(doc, messageId);
+    }
+    await reaccionar(ctx, "👎");
+    return;
   }
 
+  console.log(
+    `\n┌── 📊 LOG DE DATOS & LÓGICA DE GUARDADO ────────────────┐` +
+    `\n│ 📥 DATOS PARSEADOS DESDE EL MENSAJE:` +
+    `\n│    • Municipio:          ${municipioOficial}` +
+    `\n│    • Nodo:               ${nodo}` +
+    `\n│    • Total Verif. Msg:   ${totalVerificadores}` +
+    `\n│    • B1 (9am) Msg:       ${bloque1}` +
+    `\n│    • B2 (2pm) Msg:       ${bloque2}` +
+    `\n│    • B3 (6pm) Msg:       ${bloque3}` +
+    `\n│` +
+    `\n│ 🕒 ANÁLISIS DE TIEMPO & BLOQUES:` +
+    `\n│    • Hora Recibido (VE): ${horaStr}` +
+    `\n│    • Bloque Activo:      ${bloqueStr.toUpperCase()}` +
+    `\n│    • Valor Reportado:    ${bloque1 || bloque2 || bloque3 || totalVerificadores || 0}` +
+    `\n│` +
+    `\n│ 📜 VALORES PREVIOS EN BASE DE DATOS (HISTORIAL):` +
+    `\n│    • Prev B1 (9am):      ${historial.b1}` +
+    `\n│    • Prev B2 (2pm):      ${historial.b2}` +
+    `\n│    • Prev B3 (6pm):      ${historial.b3}` +
+    `\n│    • Prev Total:         ${historial.total}` +
+    `\n│` +
+    `\n│ 💾 VALORES RESULTANTES A GUARDAR EN SHEET:` +
+    `\n│    • Final B1 (9am):     ${b1Final}` +
+    `\n│    • Final B2 (2pm):     ${b2Final}` +
+    `\n│    • Final B3 (6pm):     ${b3Final}` +
+    `\n│    • Final Total:        ${totalFinal}` +
+    `\n└────────────────────────────────────────────────────────┘\n`
+  );
+
   const datos = {
-    [COLUMNAS.MUNICIPIO]:           municipio.trim(),
+    [COLUMNAS.MUNICIPIO]:           municipioOficial,
     [COLUMNAS.NODO]:                nodo,
     [COLUMNAS.TOTAL_VERIFICADORES]: totalFinal,
     [COLUMNAS.BLOQUE_1]:            b1Final,
@@ -192,6 +212,7 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
     [COLUMNAS.REMITENTE]:           remitente,
     [COLUMNAS.ID_MENSAJE]:          String(messageId),
     [COLUMNAS.ID_CHAT]:             String(ctx.chat.id),
+    [COLUMNAS.ESTADO]:              "OK",
   };
 
   if (filaExistente) {
@@ -203,7 +224,7 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
     console.log(`[INFO] Nueva fila insertada (Mensaje ID: ${messageId}).`);
   }
 
-  await reaccionar(ctx, "✅");
+  await reaccionar(ctx, "👍");
 }
 
 /**
@@ -235,12 +256,21 @@ export function registrarHandlers(bot) {
     }
 
     // ── 2. Filtrar por palabra clave de reporte ─────────────────
-    if (!texto.toLowerCase().includes(config.app.reportKeyword.toLowerCase())) return;
+    if (!texto.toLowerCase().includes(config.app.reportKeyword.toLowerCase())) {
+      if (esEdicion) {
+        await marcarFilaParaRevision(null, messageId);
+      }
+      return;
+    }
 
     // ── 3. Parsear datos del reporte ────────────────────────────
     const reporte = parsearReporte(texto);
     if (!reporte) {
       console.warn("[ADVERTENCIA] Palabra clave encontrada pero no se pudo parsear el reporte.");
+      if (esEdicion) {
+        await marcarFilaParaRevision(null, messageId);
+      }
+      await reaccionar(ctx, "👎");
       return;
     }
 
