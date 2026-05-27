@@ -44,6 +44,6 @@ export const config = {
     // Retardo inicial antes de la primera limpieza al arrancar (segundos)
     cleanupInitialDelayMs: 10_000,
     // Retardo entre verificaciones individuales de mensajes en la limpieza (ms)
-    cleanupRequestDelayMs: 1500,
+    cleanupRequestDelayMs: 500,
   },
 };

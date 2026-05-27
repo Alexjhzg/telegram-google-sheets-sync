@@ -48,7 +48,7 @@ export async function asegurarColumnas(hoja) {
   const cabeceras = [...hoja.headerValues];
   let modificado  = false;
 
-  for (const col of [COLUMNAS.ID_MENSAJE, COLUMNAS.ID_CHAT]) {
+  for (const col of [COLUMNAS.ID_MENSAJE, COLUMNAS.ID_CHAT, COLUMNAS.ESTADO]) {
     if (!cabeceras.includes(col)) {
       console.log(`[INFO] Columna '${col}' no encontrada. Añadiéndola...`);
       cabeceras.push(col);
@@ -69,6 +69,130 @@ export function buscarFilaPorMensaje(filas, messageId) {
   return filas.find(
     (fila) => String(fila.toObject()[COLUMNAS.ID_MENSAJE]) === String(messageId)
   ) ?? null;
+}
+
+/**
+ * Busca en la hoja la fila fija que corresponde a un municipio+nodo.
+ * No filtra por fecha — la fila es permanente.
+ * @param {import("google-spreadsheet").GoogleSpreadsheetRow[]} filas
+ * @param {string} municipioOficial
+ * @param {number} nodo
+ * @returns {import("google-spreadsheet").GoogleSpreadsheetRow | null}
+ */
+export function buscarFilaPorNodo(filas, municipioOficial, nodo) {
+  return filas.find((fila) => {
+    const mun = (fila.get(COLUMNAS.MUNICIPIO) || "").trim().toLowerCase();
+    const nod = parseInt(fila.get(COLUMNAS.NODO) || "0", 10);
+    return mun === municipioOficial.trim().toLowerCase() && nod === nodo;
+  }) ?? null;
+}
+
+/**
+ * Resetea los datos de reporte de una fila fija (borra bloques, totales,
+ * remitente, fecha, hora, ID de mensaje y estado), dejando fijos municipio y nodo.
+ * @param {import("google-spreadsheet").GoogleSpreadsheetRow} fila
+ */
+export async function resetearFila(fila) {
+  fila.set(COLUMNAS.TOTAL_VERIFICADORES, "0");
+  fila.set(COLUMNAS.BLOQUE_1,            "0");
+  fila.set(COLUMNAS.BLOQUE_2,            "0");
+  fila.set(COLUMNAS.BLOQUE_3,            "0");
+  fila.set(COLUMNAS.FECHA,               "");
+  fila.set(COLUMNAS.HORA,                "");
+  fila.set(COLUMNAS.REMITENTE,           "");
+  fila.set(COLUMNAS.ID_MENSAJE,          "");
+  fila.set(COLUMNAS.ID_CHAT,             "");
+  fila.set(COLUMNAS.ESTADO,              "");
+  await fila.save();
+}
+
+/**
+ * Resetea todas las filas que tengan una fecha distinta al día de hoy en la zona horaria configurada.
+ * De esta manera, solo quedan en la hoja principal los reportes del día actual.
+ *
+ * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
+ * @returns {Promise<number>} Número de filas reseteadas.
+ */
+export async function resetearFilasDeDiasAnteriores(doc) {
+  const hoja = doc.sheetsByIndex[0];
+  const filas = await hoja.getRows();
+
+  const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+  const hoyStr = new Date().toLocaleDateString("es-VE", opts);
+
+  let reseteadas = 0;
+  for (const fila of filas) {
+    const fechaFila = (fila.get(COLUMNAS.FECHA) || "").trim();
+    // Si la fila tiene una fecha registrada y no es el día de hoy, se resetea.
+    if (fechaFila && fechaFila !== hoyStr) {
+      const municipio = fila.get(COLUMNAS.MUNICIPIO);
+      const nodo = fila.get(COLUMNAS.NODO);
+      console.log(`[INFO] Reseteando fila del día anterior (${fechaFila}) para ${municipio} (Nodo ${nodo})`);
+      await resetearFila(fila);
+      reseteadas++;
+    }
+  }
+
+  if (reseteadas > 0) {
+    console.log(`[INFO] Reseteo de registros de días anteriores completado: ${reseteadas} fila(s) reseteada(s).`);
+  } else {
+    console.log("[INFO] Reseteo de registros de días anteriores completado: no había filas de días anteriores.");
+  }
+  return reseteadas;
+}
+
+/**
+ * Inicializa la hoja principal con una fila fija por cada nodo del catálogo
+ * 'verificadores_nodo'. Si una fila para ese nodo ya existe, no hace nada.
+ * Esta función debe llamarse al arrancar el bot.
+ *
+ * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
+ */
+export async function inicializarHojaConNodos(doc) {
+  const hojaNodos = doc.sheetsByTitle["verificadores_nodo"];
+  if (!hojaNodos) {
+    console.error("[ERROR] No se encontró la hoja 'verificadores_nodo'. No se puede inicializar.");
+    return;
+  }
+
+  const hoja = doc.sheetsByIndex[0];
+  await asegurarColumnas(hoja);
+
+  const filasNodos    = await hojaNodos.getRows();
+  const filasActuales = await hoja.getRows();
+
+  let insertados = 0;
+  for (const nodoRow of filasNodos) {
+    const municipio = (nodoRow.get("MUNICIPIO") || "").trim();
+    const nodo      = parseInt(nodoRow.get("NODO") || "0", 10);
+    if (!municipio || !nodo) continue;
+
+    const existe = buscarFilaPorNodo(filasActuales, municipio, nodo);
+    if (!existe) {
+      await hoja.addRow({
+        [COLUMNAS.MUNICIPIO]:           municipio,
+        [COLUMNAS.NODO]:                nodo,
+        [COLUMNAS.TOTAL_VERIFICADORES]: "0",
+        [COLUMNAS.BLOQUE_1]:            "0",
+        [COLUMNAS.BLOQUE_2]:            "0",
+        [COLUMNAS.BLOQUE_3]:            "0",
+        [COLUMNAS.FECHA]:               "",
+        [COLUMNAS.HORA]:                "",
+        [COLUMNAS.REMITENTE]:           "",
+        [COLUMNAS.ID_MENSAJE]:          "",
+        [COLUMNAS.ID_CHAT]:             "",
+        [COLUMNAS.ESTADO]:              "",
+      });
+      insertados++;
+      console.log(`[INFO] Fila fija creada: ${municipio} — Nodo ${nodo}`);
+    }
+  }
+
+  console.log(
+    insertados > 0
+      ? `[INFO] Inicialización completada: ${insertados} fila(s) nueva(s) creada(s).`
+      : "[INFO] Inicialización completada: todas las filas de nodos ya existían."
+  );
 }
 
 /**

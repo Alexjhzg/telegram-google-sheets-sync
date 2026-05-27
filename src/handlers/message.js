@@ -9,6 +9,8 @@ import {
   obtenerHojaDeCalculo,
   asegurarColumnas,
   buscarFilaPorMensaje,
+  buscarFilaPorNodo,
+  resetearFila,
   obtenerUltimosValores,
   COLUMNAS,
 } from "../services/sheets.js";
@@ -31,13 +33,21 @@ async function manejarEliminacion(ctx, messageId) {
     const fila = buscarFilaPorMensaje(await hoja.getRows(), messageId);
 
     if (fila) {
-      await fila.delete();
-      console.log(`[INFO] Fila eliminada de Google Sheets (Mensaje ID: ${messageId}).`);
+      await resetearFila(fila);
+      console.log(`[INFO] Fila reseteada a cero en Google Sheets (Mensaje ID: ${messageId}).`);
     } else {
-      console.warn(`[ADVERTENCIA] No se encontró fila con Mensaje ID: ${messageId} para eliminar.`);
+      console.warn(`[ADVERTENCIA] No se encontró fila con Mensaje ID: ${messageId} para resetear.`);
+    }
+
+    // Intentar eliminar también el mensaje en Telegram para mantener limpio el grupo
+    try {
+      await ctx.deleteMessage();
+      console.log(`[INFO] Mensaje de Telegram ID ${messageId} eliminado exitosamente.`);
+    } catch (err) {
+      console.warn(`[ADVERTENCIA] No se pudo borrar el mensaje de Telegram ID ${messageId}: ${err.message}`);
     }
   } catch (error) {
-    console.error("[ERROR] No se pudo eliminar el registro de Google Sheets:", error);
+    console.error("[ERROR] No se pudo resetear el registro de Google Sheets:", error);
   }
 }
 
@@ -123,30 +133,47 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
       await marcarFilaParaRevision(doc, messageId);
     }
     await reaccionar(ctx, "👎");
+
+    try {
+      await ctx.reply(
+        `⚠️ *Reporte Rechazado*\n\n` +
+        `El municipio *${municipio}* y/o el nodo *${nodo}* no existen en el catálogo oficial de verificadores.\n\n` +
+        `_Por favor, verifique y corrija los datos del reporte._`,
+        {
+          parse_mode: "Markdown",
+          reply_parameters: { message_id: messageId }
+        }
+      );
+    } catch (err) {
+      console.error("[ERROR] No se pudo enviar el mensaje de rechazo (municipio/nodo inválido):", err.message);
+    }
     return;
   }
 
-  // 3. Cargar hoja principal e historial del mismo día
+  // 3. Cargar hoja principal y buscar la fila fija del nodo
   const hoja = doc.sheetsByIndex[0];
   await asegurarColumnas(hoja);
 
   const filas = await hoja.getRows();
 
-  // Buscar si ya existe un reporte para esta combinación de municipio+nodo hoy
-  const filaExistente = filas.find(fila => {
-    const mun = (fila.get(COLUMNAS.MUNICIPIO) || "").trim().toLowerCase();
-    const nod = parseInt(fila.get(COLUMNAS.NODO) || "0", 10);
-    const fec = (fila.get(COLUMNAS.FECHA) || "").trim();
-    return mun === municipioOficial.toLowerCase() && nod === nodo && fec === fecha;
-  }) || null;
+  // Buscar la fila FIJA correspondiente a municipio+nodo (sin importar la fecha)
+  const filaExistente = buscarFilaPorNodo(filas, municipioOficial, nodo);
 
-  // Si ya existe una fila para hoy, el historial son sus valores actuales
-  const historial = filaExistente ? {
-    b1: parseInt(filaExistente.get(COLUMNAS.BLOQUE_1) || "0", 10),
-    b2: parseInt(filaExistente.get(COLUMNAS.BLOQUE_2) || "0", 10),
-    b3: parseInt(filaExistente.get(COLUMNAS.BLOQUE_3) || "0", 10),
-    total: parseInt(filaExistente.get(COLUMNAS.TOTAL_VERIFICADORES) || "0", 10)
+  // El historial solo es válido si la fila fija corresponde al mismo día.
+  // Si tiene datos de un día anterior, se tratan como cero para no acumular entre días.
+  const fechaFila = filaExistente ? (filaExistente.get(COLUMNAS.FECHA) || "").trim() : "";
+  const filaEsDeHoy = fechaFila === fecha;
+
+  const historial = (filaExistente && filaEsDeHoy) ? {
+    b1:    parseInt(filaExistente.get(COLUMNAS.BLOQUE_1)            || "0", 10),
+    b2:    parseInt(filaExistente.get(COLUMNAS.BLOQUE_2)            || "0", 10),
+    b3:    parseInt(filaExistente.get(COLUMNAS.BLOQUE_3)            || "0", 10),
+    total: parseInt(filaExistente.get(COLUMNAS.TOTAL_VERIFICADORES) || "0", 10),
   } : { b1: 0, b2: 0, b3: 0, total: 0 };
+
+  if (filaExistente && !filaEsDeHoy) {
+    console.log(`[INFO] La fila fija del nodo ${nodo} tiene datos del día anterior (${fechaFila}). Historial reseteado a cero para hoy.`);
+  }
 
   // 4. Calcular la acumulación de verificadores por bloque e histórico del mismo día
   const { b1Final, b2Final, b3Final } = calcularAcumulacion(bloqueActivo, reporte, historial);
@@ -168,6 +195,22 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
       await marcarFilaParaRevision(doc, messageId);
     }
     await reaccionar(ctx, "👎");
+
+    try {
+      await ctx.reply(
+        `⚠️ *Reporte Rechazado*\n\n` +
+        `El nodo *${nodo}* de *${municipioOficial}* ha superado el límite oficial de verificadores.\n\n` +
+        `• *Límite oficial permitido:* \`${limiteVerificadores}\`\n` +
+        `• *Total que se intentó registrar:* \`${totalFinal}\` (Acumulado hoy: B1: \`${b1Final}\` | B2: \`${b2Final}\` | B3: \`${b3Final}\`)\n\n` +
+        `_Por favor, rectifique la cantidad de verificadores en el reporte._`,
+        {
+          parse_mode: "Markdown",
+          reply_parameters: { message_id: messageId }
+        }
+      );
+    } catch (err) {
+      console.error("[ERROR] No se pudo enviar el mensaje de rechazo (exceso de verificadores):", err.message);
+    }
     return;
   }
 
@@ -218,10 +261,11 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   if (filaExistente) {
     filaExistente.assign(datos);
     await filaExistente.save();
-    console.log(`[INFO] Fila actualizada (Mensaje ID: ${messageId}).`);
+    console.log(`[INFO] Fila fija actualizada (Municipio: ${municipioOficial}, Nodo: ${nodo}, Mensaje ID: ${messageId}).`);
   } else {
+    // Fallback: si por alguna razón no existe la fila fija (p.ej. nodo nuevo), la creamos
     await hoja.addRow(datos);
-    console.log(`[INFO] Nueva fila insertada (Mensaje ID: ${messageId}).`);
+    console.log(`[INFO] Fila nueva creada como fallback (Mensaje ID: ${messageId}).`);
   }
 
   await reaccionar(ctx, "👍");
@@ -232,6 +276,47 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
  * @param {import("grammy").Bot} bot
  */
 export function registrarHandlers(bot) {
+  // Comando /reportes y /lista para consultar reportes activos de hoy
+  bot.command(["reportes", "lista"], async (ctx) => {
+    try {
+      const remitente = obtenerNombreRemitente(ctx);
+      console.log(`[INFO] Comando /reportes ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+
+      const doc = await obtenerHojaDeCalculo();
+      const hoja = doc.sheetsByIndex[0];
+      const filas = await hoja.getRows();
+
+      const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+      const hoyStr = new Date().toLocaleDateString("es-VE", opts);
+
+      const reportesHoy = filas.filter((fila) => {
+        const fec = (fila.get(COLUMNAS.FECHA) || "").trim();
+        return fec === hoyStr;
+      });
+
+      if (reportesHoy.length === 0) {
+        await ctx.reply(`📊 *Reportes registrados para hoy (${hoyStr}):*\n\nNo hay reportes registrados aún.`, { parse_mode: "Markdown" });
+        return;
+      }
+
+      let respuesta = `📊 *Reportes activos de hoy (${hoyStr}):*\n\n`;
+      for (const fila of reportesHoy) {
+        const mun = fila.get(COLUMNAS.MUNICIPIO);
+        const nod = fila.get(COLUMNAS.NODO);
+        const b1 = fila.get(COLUMNAS.BLOQUE_1) || "0";
+        const b2 = fila.get(COLUMNAS.BLOQUE_2) || "0";
+        const b3 = fila.get(COLUMNAS.BLOQUE_3) || "0";
+        const total = fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0";
+        respuesta += `• *${mun}* (Nodo ${nod}): 9am: \`${b1}\` | 2pm: \`${b2}\` | 6pm: \`${b3}\` | Total: \`${total}\`\n`;
+      }
+
+      await ctx.reply(respuesta, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error("[ERROR] Falló al ejecutar el comando /reportes:", error);
+      await ctx.reply("❌ Ocurrió un error al consultar los reportes en Google Sheets.");
+    }
+  });
+
   bot.on(["message:text", "edited_message:text"], async (ctx) => {
     const mensajeObj = ctx.message || ctx.editedMessage;
     if (!mensajeObj) return;

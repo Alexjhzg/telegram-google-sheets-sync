@@ -1,8 +1,6 @@
-"use strict";
-
 import { Cron } from "croner";
 import { config } from "../config/index.js";
-import { obtenerHojaDeCalculo, COLUMNAS } from "../services/sheets.js";
+import { obtenerHojaDeCalculo, COLUMNAS, buscarFilaPorMensaje, resetearFila, resetearFilasDeDiasAnteriores } from "../services/sheets.js";
 
 /**
  * Verifica si un mensaje de Telegram sigue existiendo intentando
@@ -53,9 +51,10 @@ async function mensajeExiste(api, chatId, messageId) {
  * registrado y elimina aquellas cuyo mensaje ya no exista en Telegram.
  *
  * @param {import("grammy").Api} api - API de Telegram para verificar mensajes.
+ * @param {number} limiteFilas - Límite de filas más recientes a analizar para evitar sobrecarga.
  */
-export async function ejecutarLimpieza(api) {
-  console.log("[INFO] Iniciando limpieza de mensajes eliminados en Telegram...");
+export async function ejecutarLimpieza(api, limiteFilas = 15) {
+  console.log(`[INFO] Iniciando limpieza de mensajes eliminados en Telegram (límite: ${limiteFilas} filas)...`);
   try {
     const doc   = await obtenerHojaDeCalculo();
     const hoja  = doc.sheetsByIndex[0];
@@ -63,7 +62,7 @@ export async function ejecutarLimpieza(api) {
 
     let eliminados = 0;
     let analizados = 0;
-    const MAX_FILAS_ANALIZAR = 40; // Limitar análisis a las 40 filas más recientes para evitar saturación de la API
+    const MAX_FILAS_ANALIZAR = limiteFilas;
 
     // Iteramos en orden inverso (de abajo hacia arriba) para evitar que el desfase de
     // índices en Google Sheets afecte a las filas restantes al eliminar registros en bucle.
@@ -103,11 +102,11 @@ export async function ejecutarLimpieza(api) {
 
       if (!existe || debeBorrarsePorRevision) {
         if (!existe && !debeBorrarsePorRevision) {
-          console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Borrando fila...`);
+          console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Reseteando fila...`);
         } else if (debeBorrarsePorRevision) {
-          console.log(`[INFO] Reporte inválido editado superó tiempo de revisión (Mensaje ID: ${messageId}). Borrando fila...`);
+          console.log(`[INFO] Reporte inválido superó tiempo de revisión (Mensaje ID: ${messageId}). Reseteando fila...`);
         }
-        await fila.delete();
+        await resetearFila(fila);
         eliminados++;
       }
 
@@ -125,22 +124,26 @@ export async function ejecutarLimpieza(api) {
   }
 }
 
-/**
- * Programa la limpieza del bot de forma declarativa utilizando Croner.
- *
- * @param {import("grammy").Api} api
- */
 export function programarLimpieza(api) {
-  const run = () => ejecutarLimpieza(api);
+  // 1. Limpieza inicial al arrancar el bot (últimas 40 filas)
+  setTimeout(() => ejecutarLimpieza(api, 40), config.app.cleanupInitialDelayMs);
 
-  // 1. Limpieza inicial al arrancar el bot (después de 10s para no bloquear el inicio)
-  setTimeout(run, config.app.cleanupInitialDelayMs);
+  // 2. Limpieza periódica continua (cada 5 minutos, verifica las últimas 40 filas)
+  new Cron("*/5 * * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 40));
 
-  // 2. Limpieza periódica continua (cada 5 minutos)
-  new Cron("*/5 * * * *", { timezone: "America/Caracas" }, run);
+  // 3. Limpieza de precisión exactamente en las horas de corte (9am, 2pm y 6pm de Venezuela, verifica 50 filas)
+  const jobCortes = new Cron("0 9,14,18 * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 50));
 
-  // 3. Limpieza de precisión exactamente en las horas de corte (9am, 2pm y 6pm de Venezuela)
-  const jobCortes = new Cron("0 9,14,18 * * *", { timezone: "America/Caracas" }, run);
+  // 4. Limpieza diaria a la medianoche (00:00) para vaciar/resetear los reportes del día anterior
+  new Cron("0 0 * * *", { timezone: "America/Caracas" }, async () => {
+    console.log("[INFO] Iniciando reseteo diario de medianoche para registros del día anterior...");
+    try {
+      const doc = await obtenerHojaDeCalculo();
+      await resetearFilasDeDiasAnteriores(doc);
+    } catch (err) {
+      console.error("[ERROR] Fallo en el reseteo diario de medianoche:", err);
+    }
+  });
 
   // Loguear de forma legible cuándo será el próximo corte real
   const proximaFecha = jobCortes.nextRun();

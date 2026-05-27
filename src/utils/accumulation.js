@@ -23,7 +23,17 @@ export function calcularAcumulacion(bloqueActivo, reporte, historial) {
 
   if (bloqueActivo === 1) {
     // B1 es el bloque activo: se puede escribir B1, y B2/B3 por adelantado
-    b1Final = bloque1 || totalVerificadores || 0;
+    // Si se reportó un bloque futuro (B2 o B3) pero no el actual (B1), no usamos el total para B1
+    const tieneReporteFuturo = (bloque2 > 0 || bloque3 > 0);
+    
+    if (bloque1 > 0) {
+      b1Final = bloque1;
+    } else if (tieneReporteFuturo) {
+      b1Final = historial.b1; // Mantiene el valor histórico de B1
+    } else {
+      b1Final = totalVerificadores || 0;
+    }
+
     b2Final = bloque2 || historial.b2 || 0;
     b3Final = bloque3 || historial.b3 || 0;
   } else if (bloqueActivo === 2) {
@@ -37,7 +47,13 @@ export function calcularAcumulacion(bloqueActivo, reporte, historial) {
     if (bloque2 > 0 || bloque1 > 0) {
       nuevoReporteB2 = incrementoB1 + bloque2;
     } else {
-      nuevoReporteB2 = valorReportado;
+      // Si no especificó B1 ni B2, pero sí especificó el futuro B3, no alteramos B2
+      const tieneReporteFuturo = (bloque3 > 0);
+      if (tieneReporteFuturo) {
+        nuevoReporteB2 = 0;
+      } else {
+        nuevoReporteB2 = valorReportado;
+      }
     }
     b2Final = b1Final + nuevoReporteB2;
 
@@ -58,7 +74,8 @@ export function calcularAcumulacion(bloqueActivo, reporte, historial) {
     } else {
       nuevoReporteB3 = valorReportado;
     }
-    b3Final = b2Final + nuevoReporteB3;
+    const baseB3 = Math.max(b1Final, b2Final);
+    b3Final = baseB3 + nuevoReporteB3;
   }
 
   return { b1Final, b2Final, b3Final };
