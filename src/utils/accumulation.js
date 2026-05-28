@@ -37,45 +37,41 @@ export function calcularAcumulacion(bloqueActivo, reporte, historial) {
     b2Final = bloque2 || historial.b2 || 0;
     b3Final = bloque3 || historial.b3 || 0;
   } else if (bloqueActivo === 2) {
-    // B1 es pasado (LOCKED)
-    b1Final = historial.b1;
+    // B1 es pasado (LOCKED) pero permite correcciones tardías o mantiene historia
+    b1Final = bloque1 || historial.b1 || 0;
 
-    // B2 es activo: se acumula el INCREMENTO tardío de B1 y lo declarado para B2
-    const incrementoB1 = Math.max(0, bloque1 - historial.b1);
-
-    let nuevoReporteB2 = 0;
-    if (bloque2 > 0 || bloque1 > 0) {
-      nuevoReporteB2 = incrementoB1 + bloque2;
+    // B2 es el bloque activo
+    if (bloque2 > 0) {
+      b2Final = bloque2;
     } else {
-      // Si no especificó B1 ni B2, pero sí especificó el futuro B3, no alteramos B2
-      const tieneReporteFuturo = (bloque3 > 0);
-      if (tieneReporteFuturo) {
-        nuevoReporteB2 = 0;
+      // Si no especificó B2, pero sí especificó B1 (tardío) o B3 (futuro), no alteramos B2
+      const tieneOtrosReportes = (bloque1 > 0 || bloque3 > 0);
+      if (tieneOtrosReportes) {
+        b2Final = historial.b2;
       } else {
-        nuevoReporteB2 = valorReportado;
+        b2Final = totalVerificadores || historial.b2 || 0;
       }
     }
-    b2Final = b1Final + nuevoReporteB2;
 
-    // B3 es futuro (adelantado): se acepta lo reportado por adelantado
+    // B3 es futuro (adelantado) o mantiene historia
     b3Final = bloque3 || historial.b3 || 0;
   } else if (bloqueActivo === 3) {
-    // B1 y B2 son pasados (LOCKED)
-    b1Final = historial.b1;
-    b2Final = historial.b2;
+    // B1 y B2 son pasados: permiten correcciones tardías o mantienen historia
+    b1Final = bloque1 || historial.b1 || 0;
+    b2Final = bloque2 || historial.b2 || 0;
 
-    // B3 es activo: se acumulan los incrementos tardíos de B1/B2 y lo de B3
-    const incrementoB1 = Math.max(0, bloque1 - historial.b1);
-    const incrementoB2 = Math.max(0, bloque2 - historial.b2);
-
-    let nuevoReporteB3 = 0;
-    if (bloque3 > 0 || bloque2 > 0 || bloque1 > 0) {
-      nuevoReporteB3 = incrementoB1 + incrementoB2 + bloque3;
+    // B3 es el bloque activo
+    if (bloque3 > 0) {
+      b3Final = bloque3;
     } else {
-      nuevoReporteB3 = valorReportado;
+      // Si no especificó B3, pero sí especificó B1 o B2 (tardíos), no alteramos B3
+      const tieneOtrosReportes = (bloque1 > 0 || bloque2 > 0);
+      if (tieneOtrosReportes) {
+        b3Final = historial.b3;
+      } else {
+        b3Final = totalVerificadores || historial.b3 || 0;
+      }
     }
-    const baseB3 = Math.max(b1Final, b2Final);
-    b3Final = baseB3 + nuevoReporteB3;
   }
 
   return { b1Final, b2Final, b3Final };
