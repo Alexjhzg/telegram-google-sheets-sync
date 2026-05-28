@@ -1,6 +1,6 @@
 import { Cron } from "croner";
 import { config } from "../config/index.js";
-import { obtenerHojaDeCalculo, COLUMNAS, buscarFilaPorMensaje, resetearFila, resetearFilasDeDiasAnteriores } from "../services/sheets.js";
+import { obtenerHojaDeCalculo, COLUMNAS, buscarFilaPorMensaje, resetearFila, resetearFilasDeDiasAnteriores, guardarHistoricoDiario } from "../services/sheets.js";
 
 /**
  * Verifica si un mensaje de Telegram sigue existiendo intentando
@@ -57,7 +57,7 @@ export async function ejecutarLimpieza(api, limiteFilas = 15) {
   console.log(`[INFO] Iniciando limpieza de mensajes eliminados en Telegram (límite: ${limiteFilas} filas)...`);
   try {
     const doc   = await obtenerHojaDeCalculo();
-    const hoja  = doc.sheetsByIndex[0];
+    const hoja  = doc.sheetsByTitle["registros_telegram"];
     const filas = await hoja.getRows();
 
     let eliminados = 0;
@@ -124,15 +124,112 @@ export async function ejecutarLimpieza(api, limiteFilas = 15) {
   }
 }
 
+/**
+ * Obtiene los totales del día desde la hoja 'formato_reporte' y los envía
+ * en el formato solicitado al canal/grupo a las 6:05 PM.
+ *
+ * @param {import("grammy").Api} api - API del bot de Telegram.
+ */
+export async function enviarReporteDiario(api) {
+  console.log("[INFO] Iniciando envío de reporte diario de las 6:05 PM...");
+  try {
+    const doc = await obtenerHojaDeCalculo();
+    const sheet = doc.sheetsByTitle["formato_reporte"];
+    if (!sheet) {
+      console.error("[ERROR] No se encontró la hoja 'formato_reporte' para generar el reporte diario.");
+      return;
+    }
+
+    await sheet.loadHeaderRow();
+    const rows = await sheet.getRows();
+
+    // Buscar la fila de TOTAL
+    const filaTotal = rows.find((r) => (r.get("MUNICIPIO") || "").trim().toUpperCase() === "TOTAL");
+    if (!filaTotal) {
+      console.error("[ERROR] No se encontró la fila 'TOTAL' en la hoja 'formato_reporte'.");
+      return;
+    }
+
+    const limiteStr = filaTotal.get("CANT. DE VERIFICADORES") || "0";
+    const v9amStr   = filaTotal.get("9:00 a. m.") || "0";
+    const v2pmStr   = filaTotal.get("2:00 p. m.") || "0";
+    const v6pmStr   = filaTotal.get("6:00 p. m.") || "0";
+    const vTotalStr = filaTotal.get("TOTAL") || "0";
+
+    const parseVal = (val) => {
+      if (!val) return 0;
+      const parsed = parseFloat(String(val).replace(",", "."));
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const limite = parseVal(limiteStr);
+    const v9am   = parseVal(v9amStr);
+    const v2pm   = parseVal(v2pmStr);
+    const v6pm   = parseVal(v6pmStr);
+    const vTotal = parseVal(vTotalStr);
+
+    if (limite === 0) {
+      console.error("[ERROR] El límite total de verificadores en la hoja es 0. Abortando reporte.");
+      return;
+    }
+
+    const pct9am   = ((v9am / limite) * 100).toFixed(2).replace(".", ",");
+    const pct2pm   = ((v2pm / limite) * 100).toFixed(2).replace(".", ",");
+    const pct6pm   = ((v6pm / limite) * 100).toFixed(2).replace(".", ",");
+    const pctTotal = ((vTotal / limite) * 100).toFixed(0);
+
+    // Obtener el día de la semana actual en español (Zona Horaria Venezuela)
+    const opcionesDia = { timeZone: "America/Caracas", weekday: "long" };
+    const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
+    // Capitalizar el día (ej: "Lunes")
+    const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
+
+    const mensaje =
+      `${diaSemana}\n\n` +
+      `Monagas\n` +
+      `Reporte de Encuestadores SEGEN en campo:\n` +
+      `9am ${v9am}/${limite} = ${pct9am}%\n` +
+      `2pm ${v2pm}/${limite} = ${pct2pm}%\n` +
+      `6pm ${v6pm}/${limite} = ${pct6pm}%\n` +
+      `Acumulado campo ${vTotal}/${limite} = ${pctTotal}%`;
+
+    // Buscar el Chat ID para enviar el reporte
+    let chatId = process.env.TELEGRAM_REPORT_CHAT_ID;
+    if (!chatId) {
+      // Intentamos extraer el chat ID de cualquier registro guardado en la hoja principal
+      const sheetPrincipal = doc.sheetsByTitle["registros_telegram"];
+      const rowsPrincipal = await sheetPrincipal.getRows();
+      for (const row of rowsPrincipal) {
+        const cId = row.get(COLUMNAS.ID_CHAT);
+        if (cId) {
+          chatId = cId;
+          break;
+        }
+      }
+    }
+
+    // Fallback si no hay registros aún
+    if (!chatId) {
+      chatId = -1003966980568;
+    }
+
+    console.log(`[INFO] Enviando reporte diario al Chat ID: ${chatId}`);
+    await api.sendMessage(chatId, mensaje);
+    console.log("[INFO] Reporte diario enviado con éxito.");
+  } catch (err) {
+    console.error("[ERROR] Falló la generación/envío del reporte diario:", err);
+  }
+}
+
 export function programarLimpieza(api) {
-  // 1. Limpieza inicial al arrancar el bot (últimas 40 filas)
-  setTimeout(() => ejecutarLimpieza(api, 40), config.app.cleanupInitialDelayMs);
+  // 1. Limpieza inicial al arrancar el bot (últimas 60 filas)
+  setTimeout(() => ejecutarLimpieza(api, 60), config.app.cleanupInitialDelayMs);
 
-  // 2. Limpieza periódica continua (cada 5 minutos, verifica las últimas 40 filas)
-  new Cron("*/5 * * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 40));
+  // 2. Limpieza periódica continua (cada 5 minutos, verifica las últimas 60 filas)
+  new Cron("*/5 * * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 60));
 
-  // 3. Limpieza de precisión exactamente en las horas de corte (9am, 2pm y 6pm de Venezuela, verifica 50 filas)
-  const jobCortes = new Cron("0 9,14,18 * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 50));
+  // 3. Limpieza de precisión exactamente en las horas de corte (9am, 2pm y 6pm de Venezuela, verifica 60 filas)
+  const jobCortes = new Cron("0 9,14,18 * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 60));
 
   // 4. Limpieza diaria a la medianoche (00:00) para vaciar/resetear los reportes del día anterior
   new Cron("0 0 * * *", { timezone: "America/Caracas" }, async () => {
@@ -145,6 +242,20 @@ export function programarLimpieza(api) {
     }
   });
 
+  // 5. Envío automático del reporte consolidado diario a las 6:05 PM (18:05 VET)
+  const jobReporte = new Cron("5 18 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api));
+
+  // 6. Resguardo de historial diario a las 11:00 PM (23:00 VET)
+  const jobHistorico = new Cron("0 23 * * *", { timezone: "America/Caracas" }, async () => {
+    console.log("[INFO] Iniciando resguardo de historial diario a las 11:00 PM VET...");
+    try {
+      const doc = await obtenerHojaDeCalculo();
+      await guardarHistoricoDiario(doc);
+    } catch (err) {
+      console.error("[ERROR] Fallo al guardar el historial diario:", err);
+    }
+  });
+
   // Loguear de forma legible cuándo será el próximo corte real
   const proximaFecha = jobCortes.nextRun();
   const proximoCorteStr = proximaFecha.toLocaleTimeString("es-VE", {
@@ -153,4 +264,22 @@ export function programarLimpieza(api) {
     minute: "2-digit",
   });
   console.log(`[INFO] Limpieza horaria activa. Siguiente corte a las ${proximoCorteStr} (hora de Venezuela).`);
+
+  const proximoReporteFecha = jobReporte.nextRun();
+  const proximoReporteStr = proximoReporteFecha.toLocaleDateString("es-VE", {
+    timeZone: "America/Caracas",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  console.log(`[INFO] Reporte diario consolidado activo. Siguiente reporte programado para el ${proximoReporteStr} (hora de Venezuela).`);
+
+  const proximoHistoricoFecha = jobHistorico.nextRun();
+  const proximoHistoricoStr = proximoHistoricoFecha.toLocaleDateString("es-VE", {
+    timeZone: "America/Caracas",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  console.log(`[INFO] Resguardo histórico diario activo. Siguiente guardado programado para el ${proximoHistoricoStr} (hora de Venezuela).`);
 }

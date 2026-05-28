@@ -30,8 +30,8 @@ COPY . .
 # El usuario 'node' viene incluido en la imagen oficial node:alpine.
 USER node
 
-# ── Puerto: el bot usa long-polling, no expone ningún puerto ──
-# (No se requiere EXPOSE)
+# ── Puerto: Exponer el puerto para Render (HTTP Server / Health Check) ──
+EXPOSE 8080
 
 # ── Comando de inicio ─────────────────────────────────────────
 CMD ["node", "bot.js"]

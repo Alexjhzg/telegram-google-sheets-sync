@@ -29,7 +29,7 @@ async function manejarEliminacion(ctx, messageId) {
   console.log(`[INFO] Solicitud de eliminación detectada — Mensaje ID: ${messageId}`);
   try {
     const doc  = await obtenerHojaDeCalculo();
-    const hoja = doc.sheetsByIndex[0];
+    const hoja = doc.sheetsByTitle["registros_telegram"];
     const fila = buscarFilaPorMensaje(await hoja.getRows(), messageId);
 
     if (fila) {
@@ -59,7 +59,7 @@ async function manejarEliminacion(ctx, messageId) {
 async function marcarFilaParaRevision(doc, messageId) {
   try {
     const documento = doc || await obtenerHojaDeCalculo();
-    const hoja = documento.sheetsByIndex[0];
+    const hoja = documento.sheetsByTitle["registros_telegram"];
     const filas = await hoja.getRows();
     const fila = buscarFilaPorMensaje(filas, messageId);
     if (fila) {
@@ -151,7 +151,7 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   }
 
   // 3. Cargar hoja principal y buscar la fila fija del nodo
-  const hoja = doc.sheetsByIndex[0];
+  const hoja = doc.sheetsByTitle["registros_telegram"];
   await asegurarColumnas(hoja);
 
   const filas = await hoja.getRows();
@@ -283,7 +283,7 @@ export function registrarHandlers(bot) {
       console.log(`[INFO] Comando /reportes ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
 
       const doc = await obtenerHojaDeCalculo();
-      const hoja = doc.sheetsByIndex[0];
+      const hoja = doc.sheetsByTitle["registros_telegram"];
       const filas = await hoja.getRows();
 
       const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };

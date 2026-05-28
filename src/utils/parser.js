@@ -17,10 +17,10 @@ export function parsearReporte(texto) {
   const regexNodo      = /(?:Nodo|nodo)\*?\s*:\*?\s*(\d+)/i;
   const regexTotal     = /(?:Total Verificadores en el nodo|Total Verificadores)\*?\s*:\*?\s*(\d+)/i;
 
-  // Anclas por hora de corte para máxima flexibilidad de formato
-  const regexBloque1   = /9\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*(\d+)?/i;
-  const regexBloque2   = /2\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*(\d+)?/i;
-  const regexBloque3   = /6\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*(\d+)?/i;
+  // Anclas por hora de corte para máxima flexibilidad de formato (soporta opcionalmente paréntesis o corchetes alrededor del número)
+  const regexBloque1   = /9\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?(\d+)?[\)\]\}]?/i;
+  const regexBloque2   = /2\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?(\d+)?[\)\]\}]?/i;
+  const regexBloque3   = /6\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?(\d+)?[\)\]\}]?/i;
 
   const matchMunicipio = regexMunicipio.exec(texto);
   const matchNodo      = regexNodo.exec(texto);

@@ -114,7 +114,7 @@ export async function resetearFila(fila) {
  * @returns {Promise<number>} Número de filas reseteadas.
  */
 export async function resetearFilasDeDiasAnteriores(doc) {
-  const hoja = doc.sheetsByIndex[0];
+  const hoja = doc.sheetsByTitle["registros_telegram"];
   const filas = await hoja.getRows();
 
   const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
@@ -142,6 +142,85 @@ export async function resetearFilasDeDiasAnteriores(doc) {
 }
 
 /**
+ * Guarda todos los registros actuales de registros_telegram en la hoja registros_historicos_telegram,
+ * agregando una fila de cabecera con la fecha actual de Venezuela para separar e identificar el día.
+ *
+ * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
+ */
+export async function guardarHistoricoDiario(doc) {
+  console.log("[INFO] Guardando histórico diario en la hoja 'registros_historicos_telegram'...");
+  
+  const hojaPrincipal = doc.sheetsByTitle["registros_telegram"];
+  const filas = await hojaPrincipal.getRows();
+
+  let sheetHistorica = doc.sheetsByTitle["registros_historicos_telegram"];
+  if (!sheetHistorica) {
+    console.log("[INFO] Creando la hoja 'registros_historicos_telegram' ya que no existía...");
+    sheetHistorica = await doc.addSheet({
+      title: "registros_historicos_telegram"
+    });
+  }
+
+  // Asegurar cabeceras si la hoja está recién creada o vacía
+  try {
+    await sheetHistorica.loadHeaderRow();
+  } catch (err) {
+    console.log("[INFO] Inicializando cabeceras en 'registros_historicos_telegram'...");
+    await sheetHistorica.setHeaderRow([
+      COLUMNAS.MUNICIPIO,
+      COLUMNAS.NODO,
+      COLUMNAS.TOTAL_VERIFICADORES,
+      COLUMNAS.BLOQUE_1,
+      COLUMNAS.BLOQUE_2,
+      COLUMNAS.BLOQUE_3,
+      COLUMNAS.FECHA,
+      COLUMNAS.HORA,
+      COLUMNAS.REMITENTE,
+      COLUMNAS.ID_MENSAJE,
+      COLUMNAS.ID_CHAT,
+      COLUMNAS.ESTADO
+    ]);
+  }
+
+  const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+  const hoyStr = new Date().toLocaleDateString("es-VE", opts);
+
+  const opcionesDia = { timeZone: config.app.timezone, weekday: "long" };
+  const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
+  const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
+
+  const filaVacia = {
+    [COLUMNAS.MUNICIPIO]: ""
+  };
+
+  const filaFecha = {
+    [COLUMNAS.MUNICIPIO]: `--- HISTORIAL DEL DÍA: ${diaSemana}, ${hoyStr} ---`
+  };
+
+  const filasDatos = filas.map(f => {
+    const obj = f.toObject();
+    return {
+      [COLUMNAS.MUNICIPIO]: obj[COLUMNAS.MUNICIPIO] || "",
+      [COLUMNAS.NODO]: obj[COLUMNAS.NODO] || "",
+      [COLUMNAS.TOTAL_VERIFICADORES]: obj[COLUMNAS.TOTAL_VERIFICADORES] || "",
+      [COLUMNAS.BLOQUE_1]: obj[COLUMNAS.BLOQUE_1] || "",
+      [COLUMNAS.BLOQUE_2]: obj[COLUMNAS.BLOQUE_2] || "",
+      [COLUMNAS.BLOQUE_3]: obj[COLUMNAS.BLOQUE_3] || "",
+      [COLUMNAS.FECHA]: obj[COLUMNAS.FECHA] || "",
+      [COLUMNAS.HORA]: obj[COLUMNAS.HORA] || "",
+      [COLUMNAS.REMITENTE]: obj[COLUMNAS.REMITENTE] || "",
+      [COLUMNAS.ID_MENSAJE]: obj[COLUMNAS.ID_MENSAJE] || "",
+      [COLUMNAS.ID_CHAT]: obj[COLUMNAS.ID_CHAT] || "",
+      [COLUMNAS.ESTADO]: obj[COLUMNAS.ESTADO] || ""
+    };
+  });
+
+  // Guardar en bloque para mayor velocidad y menor uso de cuota de la API
+  await sheetHistorica.addRows([filaVacia, filaFecha, ...filasDatos]);
+  console.log(`[INFO] Historial diario guardado con éxito. Se copiaron ${filasDatos.length} filas.`);
+}
+
+/**
  * Inicializa la hoja principal con una fila fija por cada nodo del catálogo
  * 'verificadores_nodo'. Si una fila para ese nodo ya existe, no hace nada.
  * Esta función debe llamarse al arrancar el bot.
@@ -155,7 +234,7 @@ export async function inicializarHojaConNodos(doc) {
     return;
   }
 
-  const hoja = doc.sheetsByIndex[0];
+  const hoja = doc.sheetsByTitle["registros_telegram"];
   await asegurarColumnas(hoja);
 
   const filasNodos    = await hojaNodos.getRows();
