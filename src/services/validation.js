@@ -25,6 +25,13 @@ export async function validarMunicipioNodo(doc, municipio, nodo) {
   const municipioNormalizado = normalizar(municipio);
 
   const filasNodos = await hojaNodos.getRows();
+
+  // Buscar si el municipio existe en alguna parte del catálogo para extraer su nombre oficial
+  const filaMunicipio = filasNodos.find(fila => normalizar(fila.get("MUNICIPIO")) === municipioNormalizado);
+  const municipioExiste = !!filaMunicipio;
+  const municipioOficialDetectado = filaMunicipio ? (filaMunicipio.get("MUNICIPIO") || "").trim() : municipio;
+
+  // Buscar el registro exacto de la combinación municipio + nodo
   const registroOficial = filasNodos.find(fila => {
     const mun = normalizar(fila.get("MUNICIPIO"));
     const nod = parseInt(fila.get("NODO") || "0", 10);
@@ -32,7 +39,11 @@ export async function validarMunicipioNodo(doc, municipio, nodo) {
   });
 
   if (!registroOficial) {
-    return { valido: false, limiteVerificadores: 0, municipioOficial: municipio };
+    if (!municipioExiste) {
+      return { valido: false, razon: "MUNICIPIO_INCORRECTO", limiteVerificadores: 0, municipioOficial: municipio };
+    } else {
+      return { valido: false, razon: "NODO_INCORRECTO", limiteVerificadores: 0, municipioOficial: municipioOficialDetectado };
+    }
   }
 
   const municipioOficial = (registroOficial.get("MUNICIPIO") || "").trim();

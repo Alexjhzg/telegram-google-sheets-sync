@@ -119,14 +119,14 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   const doc = await obtenerHojaDeCalculo();
 
   // 2. Validar Municipio y Nodo contra catálogo oficial (verificadores_nodo)
-  const { valido, limiteVerificadores, municipioOficial } = await validarMunicipioNodo(doc, municipio, nodo);
+  const { valido, limiteVerificadores, municipioOficial, razon } = await validarMunicipioNodo(doc, municipio, nodo);
   if (!valido) {
     console.warn(
       `\n┌── ⚠️ VALIDACIÓN FALLIDA ───────────────────────────────┐` +
-      `\n│ Municipio y/o Nodo inválidos. El reporte no existe en  │` +
-      `\n│ la base de datos oficial.                              │` +
+      `\n│ Municipio y/o Nodo inválidos.                          │` +
       `\n│    • Municipio parsed:   ${municipio}` +
       `\n│    • Nodo parsed:        ${nodo}` +
+      `\n│    • Razón:              ${razon}` +
       `\n└────────────────────────────────────────────────────────┘\n`
     );
     if (esEdicion) {
@@ -135,15 +135,26 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
     await reaccionar(ctx, "👎");
 
     try {
-      await ctx.reply(
-        `⚠️ *Reporte Rechazado*\n\n` +
-        `El municipio *${municipio}* y/o el nodo *${nodo}* no existen en el catálogo oficial de verificadores.\n\n` +
-        `_Por favor, verifique y corrija los datos del reporte._`,
-        {
-          parse_mode: "Markdown",
-          reply_parameters: { message_id: messageId }
-        }
-      );
+      let mensajeRespuesta = "";
+      if (razon === "MUNICIPIO_INCORRECTO") {
+        mensajeRespuesta = 
+          `⚠️ *Reporte Rechazado: Municipio no reconocido*\n\n` +
+          `Hola *${remitente}*, el municipio *${municipio}* no se encuentra registrado en el catálogo oficial.\n\n` +
+          `• *¿Qué pudo pasar?* Es posible que haya un error de ortografía.\n` +
+          `• *Municipios válidos (ejemplos):* Acosta, Caripe, Maturín, Cedeño, Piar, Libertador, etc.\n\n` +
+          `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram corrigiendo el municipio y el bot lo procesará automáticamente.`;
+      } else {
+        mensajeRespuesta = 
+          `⚠️ *Reporte Rechazado: Nodo no reconocido*\n\n` +
+          `Hola *${remitente}*, en el municipio *${municipioOficial}* no existe el nodo *${nodo}* en nuestro catálogo.\n\n` +
+          `• *¿Qué pudo pasar?* El número de nodo ingresado no corresponde a este municipio.\n\n` +
+          `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram colocando el número de nodo correcto.`;
+      }
+
+      await ctx.reply(mensajeRespuesta, {
+        parse_mode: "Markdown",
+        reply_parameters: { message_id: messageId }
+      });
     } catch (err) {
       console.error("[ERROR] No se pudo enviar el mensaje de rechazo (municipio/nodo inválido):", err.message);
     }
@@ -198,11 +209,11 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
 
     try {
       await ctx.reply(
-        `⚠️ *Reporte Rechazado*\n\n` +
-        `El nodo *${nodo}* de *${municipioOficial}* ha superado el límite oficial de verificadores.\n\n` +
-        `• *Límite oficial permitido:* \`${limiteVerificadores}\`\n` +
-        `• *Total que se intentó registrar:* \`${totalFinal}\` (Acumulado hoy: B1: \`${b1Final}\` | B2: \`${b2Final}\` | B3: \`${b3Final}\`)\n\n` +
-        `_Por favor, rectifique la cantidad de verificadores en el reporte._`,
+        `⚠️ *Reporte Rechazado: Límite de verificadores superado*\n\n` +
+        `Hola *${remitente}*, el reporte para el nodo *${nodo}* de *${municipioOficial}* supera el cupo máximo de personal permitido para hoy.\n\n` +
+        `• *Límite oficial permitido:* \`${limiteVerificadores}\` verificadores.\n` +
+        `• *Total acumulado proyectado:* \`${totalFinal}\` (Suma de hoy: B1: \`${b1Final}\` | B2: \`${b2Final}\` | B3: \`${b3Final}\`)\n\n` +
+        `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram reduciendo la cantidad para que se ajuste al límite oficial y el bot lo procesará al instante.`,
         {
           parse_mode: "Markdown",
           reply_parameters: { message_id: messageId }
