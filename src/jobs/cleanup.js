@@ -210,7 +210,7 @@ export async function enviarReporteDiario(api) {
 
     // Fallback si no hay registros aún
     if (!chatId) {
-      chatId = -1003966980568;
+      chatId = -1003785032543;
     }
 
     console.log(`[INFO] Enviando reporte diario al Chat ID: ${chatId}`);
