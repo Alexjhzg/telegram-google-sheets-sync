@@ -139,14 +139,14 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
       if (razon === "MUNICIPIO_INCORRECTO") {
         mensajeRespuesta = 
           `⚠️ *Reporte Rechazado: Municipio no reconocido*\n\n` +
-          `Hola *${remitente}*, el municipio *${municipio}* no se encuentra registrado en el catálogo oficial.\n\n` +
+          `Hola *${remitente}*, el municipio *${municipio}* no se encuentra registrado en la base de datos oficial.\n\n` +
           `• *¿Qué pudo pasar?* Es posible que haya un error de ortografía.\n` +
           `• *Municipios válidos (ejemplos):* Acosta, Caripe, Maturín, Cedeño, Piar, Libertador, etc.\n\n` +
           `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram corrigiendo el municipio y el bot lo procesará automáticamente.`;
       } else {
         mensajeRespuesta = 
           `⚠️ *Reporte Rechazado: Nodo no reconocido*\n\n` +
-          `Hola *${remitente}*, en el municipio *${municipioOficial}* no existe el nodo *${nodo}* en nuestro catálogo.\n\n` +
+          `Hola *${remitente}*, en el municipio *${municipioOficial}* no existe el nodo *${nodo}* en la base de datos oficial.\n\n` +
           `• *¿Qué pudo pasar?* El número de nodo ingresado no corresponde a este municipio.\n\n` +
           `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram colocando el número de nodo correcto.`;
       }
