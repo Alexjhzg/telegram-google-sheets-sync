@@ -13,8 +13,15 @@
 export function calcularAcumulacion(bloqueActivo, reporte, historial) {
   const { totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
 
-  // Extraer el valor numérico único reportado (de cualquier campo del mensaje)
-  const valorReportado = bloque1 || bloque2 || bloque3 || totalVerificadores || 0;
+  // Extraer el valor numérico correspondiente al bloque activo prioritariamente, con fallback
+  let valorReportado = 0;
+  if (bloqueActivo === 1) {
+    valorReportado = bloque1 || totalVerificadores || bloque2 || bloque3 || 0;
+  } else if (bloqueActivo === 2) {
+    valorReportado = bloque2 || totalVerificadores || bloque1 || bloque3 || 0;
+  } else if (bloqueActivo === 3) {
+    valorReportado = bloque3 || totalVerificadores || bloque1 || bloque2 || 0;
+  }
 
   // Inicializar acumulaciones finales con los valores históricos (los bloques pasados y futuros se quedan congelados)
   let b1Final = historial.b1;
