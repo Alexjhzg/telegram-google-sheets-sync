@@ -176,7 +176,7 @@ export async function enviarReporteDiario(api) {
     const pct9am   = ((v9am / limite) * 100).toFixed(2).replace(".", ",");
     const pct2pm   = ((v2pm / limite) * 100).toFixed(2).replace(".", ",");
     const pct6pm   = ((v6pm / limite) * 100).toFixed(2).replace(".", ",");
-    const pctTotal = ((vTotal / limite) * 100).toFixed(0);
+    const pctTotal = ((vTotal / limite) * 100).toFixed(2).replace(".", ",");
 
     // Obtener el día de la semana actual en español (Zona Horaria Venezuela)
     const opcionesDia = { timeZone: "America/Caracas", weekday: "long" };
