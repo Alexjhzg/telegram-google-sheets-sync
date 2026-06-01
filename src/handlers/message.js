@@ -142,13 +142,13 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
           `Hola *${remitente}*, el municipio *${municipio}* no se encuentra registrado en la base de datos oficial.\n\n` +
           `• *¿Qué pudo pasar?* Es posible que haya un error de ortografía.\n` +
           `• *Municipios válidos (ejemplos):* Acosta, Caripe, Maturín, Cedeño, Piar, Libertador, etc.\n\n` +
-          `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram corrigiendo el municipio y el bot lo procesará automáticamente.`;
+          `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje o vuelve a enviar el reporte corregido.`;
       } else {
         mensajeRespuesta = 
           `⚠️ *Reporte Rechazado: Nodo no reconocido*\n\n` +
           `Hola *${remitente}*, en el municipio *${municipioOficial}* no existe el nodo *${nodo}* en la base de datos oficial.\n\n` +
           `• *¿Qué pudo pasar?* El número de nodo ingresado no corresponde a este municipio.\n\n` +
-          `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram colocando el número de nodo correcto.`;
+          `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje o vuelve a enviar el reporte corregido.`;
       }
 
       await ctx.reply(mensajeRespuesta, {
@@ -213,7 +213,7 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
         `Hola *${remitente}*, el reporte para el nodo *${nodo}* de *${municipioOficial}* supera el cupo máximo de personal permitido para hoy.\n\n` +
         `• *Límite oficial permitido:* \`${limiteVerificadores}\` verificadores.\n` +
         `• *Total acumulado proyectado:* \`${totalFinal}\` (Suma de hoy: B1: \`${b1Final}\` | B2: \`${b2Final}\` | B3: \`${b3Final}\`)\n\n` +
-        `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje original de Telegram reduciendo la cantidad para que se ajuste al límite oficial y el bot lo procesará al instante.`,
+        `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje o vuelve a enviar el reporte corregido con la cantidad de personal ajustada.`,
         {
           parse_mode: "Markdown",
           reply_parameters: { message_id: messageId }
