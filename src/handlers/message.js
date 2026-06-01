@@ -178,7 +178,7 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
   // 4. Calcular la acumulación de verificadores por bloque e histórico del mismo día
   const { b1Final, b2Final, b3Final } = calcularAcumulacion(bloqueActivo, reporte, historial);
 
-  const totalFinal = Math.max(totalVerificadores || 0, b1Final, b2Final, b3Final);
+  const totalFinal = b1Final + b2Final + b3Final;
 
   // 6. Validar capacidad máxima de verificadores permitida
   if (totalFinal > limiteVerificadores) {
