@@ -126,12 +126,13 @@ export async function ejecutarLimpieza(api, limiteFilas = 15) {
 
 /**
  * Obtiene los totales del día desde la hoja 'formato_reporte' y los envía
- * en el formato solicitado al canal/grupo a las 6:05 PM.
+ * en el formato solicitado al canal/grupo según el corte de hora activo.
  *
  * @param {import("grammy").Api} api - API del bot de Telegram.
+ * @param {number} corte - El corte de reporte: 1 para 9:05 am, 2 para 2:05 pm, 3 para 6:05 pm.
  */
-export async function enviarReporteDiario(api) {
-  console.log("[INFO] Iniciando envío de reporte diario de las 6:05 PM...");
+export async function enviarReporteDiario(api, corte = 3) {
+  console.log(`[INFO] Iniciando envío de reporte consolidado (Corte: ${corte})...`);
   try {
     const doc = await obtenerHojaDeCalculo();
     const sheet = doc.sheetsByTitle["formato_reporte"];
@@ -184,13 +185,18 @@ export async function enviarReporteDiario(api) {
     // Capitalizar el día (ej: "Lunes")
     const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
 
+    // Formatear las líneas de los cortes de forma dinámica
+    const linea9am = `9:00 am ${v9am}/${limite} = ${pct9am}%`;
+    const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm`;
+    const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm`;
+
     const mensaje =
       `${diaSemana}\n\n` +
       `Monagas\n` +
       `Reporte de Encuestadores SEGEN en campo:\n` +
-      `9am ${v9am}/${limite} = ${pct9am}%\n` +
-      `2pm ${v2pm}/${limite} = ${pct2pm}%\n` +
-      `6pm ${v6pm}/${limite} = ${pct6pm}%\n` +
+      `${linea9am}\n` +
+      `${linea2pm}\n` +
+      `${linea6pm}\n` +
       `Acumulado campo ${vTotal}/${limite} = ${pctTotal}%`;
 
     // Buscar el Chat ID para enviar el reporte
@@ -213,11 +219,11 @@ export async function enviarReporteDiario(api) {
       chatId = -1003785032543;
     }
 
-    console.log(`[INFO] Enviando reporte diario al Chat ID: ${chatId}`);
+    console.log(`[INFO] Enviando reporte consolidado (Corte: ${corte}) al Chat ID: ${chatId}`);
     await api.sendMessage(chatId, mensaje);
-    console.log("[INFO] Reporte diario enviado con éxito.");
+    console.log(`[INFO] Reporte consolidado del corte ${corte} enviado con éxito.`);
   } catch (err) {
-    console.error("[ERROR] Falló la generación/envío del reporte diario:", err);
+    console.error(`[ERROR] Falló la generación/envío del reporte consolidado del corte ${corte}:`, err);
   }
 }
 
@@ -242,8 +248,15 @@ export function programarLimpieza(api) {
     }
   });
 
-  // 5. Envío automático del reporte consolidado diario a las 6:05 PM (18:05 VET)
-  const jobReporte = new Cron("5 18 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api));
+  // 5. Envíos automáticos de los reportes consolidados por cortes (hora de Venezuela)
+  // 9:05 AM (Corte 1)
+  const jobReporte9am = new Cron("5 9 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 1));
+
+  // 2:05 PM (Corte 2)
+  const jobReporte2pm = new Cron("5 14 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 2));
+
+  // 6:05 PM (Corte 3)
+  const jobReporte6pm = new Cron("5 18 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 3));
 
   // 6. Resguardo de historial diario a las 11:00 PM (23:00 VET)
   const jobHistorico = new Cron("0 23 * * *", { timezone: "America/Caracas" }, async () => {
@@ -265,14 +278,14 @@ export function programarLimpieza(api) {
   });
   console.log(`[INFO] Limpieza horaria activa. Siguiente corte a las ${proximoCorteStr} (hora de Venezuela).`);
 
-  const proximoReporteFecha = jobReporte.nextRun();
+  const proximoReporteFecha = jobReporte9am.nextRun();
   const proximoReporteStr = proximoReporteFecha.toLocaleDateString("es-VE", {
     timeZone: "America/Caracas",
     weekday: "long",
     hour: "2-digit",
     minute: "2-digit",
   });
-  console.log(`[INFO] Reporte diario consolidado activo. Siguiente reporte programado para el ${proximoReporteStr} (hora de Venezuela).`);
+  console.log(`[INFO] Reporte diario consolidado de cortes activo. Siguiente reporte programado para el ${proximoReporteStr} (hora de Venezuela).`);
 
   const proximoHistoricoFecha = jobHistorico.nextRun();
   const proximoHistoricoStr = proximoHistoricoFecha.toLocaleDateString("es-VE", {
