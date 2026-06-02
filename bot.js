@@ -9,9 +9,9 @@ import { Bot }                      from "grammy";
 import { registrarHandlers }        from "./src/handlers/message.js";
 import { programarLimpieza }        from "./src/jobs/cleanup.js";
 import { obtenerHojaDeCalculo,
-         inicializarHojaConNodos,
-         resetearFilasDeDiasAnteriores,
-         ordenarYLimpiarHojaPrincipal }  from "./src/services/sheets.js";
+         resetearFilasDeDiasAnteriores }  from "./src/services/sheets.js";
+import { inicializarHojaConNodos,
+         ordenarYLimpiarHojaPrincipal }   from "./src/services/sheets.business.js";
 
 // ── Instanciar el bot ───────────────────────────────────────────
 const bot = new Bot(config.telegram.token);

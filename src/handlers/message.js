@@ -11,9 +11,9 @@ import {
   buscarFilaPorMensaje,
   buscarFilaPorNodo,
   resetearFila,
-  obtenerUltimosValores,
   COLUMNAS,
 } from "../services/sheets.js";
+import { registrarComandos } from "./commands.js";
 
 // Regex que detecta si un mensaje contiene una solicitud de eliminación manual
 const REGEX_ELIMINAR = /\b(?:eliminar|borrar|eliminado|borrado)\b/i;
@@ -287,46 +287,8 @@ async function guardarReporte(ctx, reporte, tiempo, remitente, messageId) {
  * @param {import("grammy").Bot} bot
  */
 export function registrarHandlers(bot) {
-  // Comando /reportes y /lista para consultar reportes activos de hoy
-  bot.command(["reportes", "lista"], async (ctx) => {
-    try {
-      const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando /reportes ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
-
-      const doc = await obtenerHojaDeCalculo();
-      const hoja = doc.sheetsByTitle["registros_telegram"];
-      const filas = await hoja.getRows();
-
-      const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
-      const hoyStr = new Date().toLocaleDateString("es-VE", opts);
-
-      const reportesHoy = filas.filter((fila) => {
-        const fec = (fila.get(COLUMNAS.FECHA) || "").trim();
-        return fec === hoyStr;
-      });
-
-      if (reportesHoy.length === 0) {
-        await ctx.reply(`📊 *Reportes registrados para hoy (${hoyStr}):*\n\nNo hay reportes registrados aún.`, { parse_mode: "Markdown" });
-        return;
-      }
-
-      let respuesta = `📊 *Reportes activos de hoy (${hoyStr}):*\n\n`;
-      for (const fila of reportesHoy) {
-        const mun = fila.get(COLUMNAS.MUNICIPIO);
-        const nod = fila.get(COLUMNAS.NODO);
-        const b1 = fila.get(COLUMNAS.BLOQUE_1) || "0";
-        const b2 = fila.get(COLUMNAS.BLOQUE_2) || "0";
-        const b3 = fila.get(COLUMNAS.BLOQUE_3) || "0";
-        const total = fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0";
-        respuesta += `• *${mun}* (Nodo ${nod}): 9am: \`${b1}\` | 2pm: \`${b2}\` | 6pm: \`${b3}\` | Total: \`${total}\`\n`;
-      }
-
-      await ctx.reply(respuesta, { parse_mode: "Markdown" });
-    } catch (error) {
-      console.error("[ERROR] Falló al ejecutar el comando /reportes:", error);
-      await ctx.reply("❌ Ocurrió un error al consultar los reportes en Google Sheets.");
-    }
-  });
+  // Registrar comandos administrativos (/reportes, /lista, etc.)
+  registrarComandos(bot);
 
   bot.on(["message:text", "edited_message:text"], async (ctx) => {
     const mensajeObj = ctx.message || ctx.editedMessage;
