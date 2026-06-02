@@ -221,6 +221,91 @@ export async function guardarHistoricoDiario(doc) {
 }
 
 /**
+ * Filtra filas completamente vacías (que no tienen Municipio o Nodo) y ordena 
+ * todas las filas activas en 'registros_telegram' por Municipio (alfabético) 
+ * y luego por Nodo (numérico). Esto elimina cualquier celda en blanco dejada
+ * por nodos eliminados y mantiene la hoja 100% pulida.
+ *
+ * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
+ */
+export async function ordenarYLimpiarHojaPrincipal(doc) {
+  console.log("[INFO] Iniciando limpieza de filas vacías y ordenamiento de registros_telegram...");
+  try {
+    const sheet = doc.sheetsByTitle["registros_telegram"];
+    if (!sheet) {
+      console.error("[ERROR] No se encontró la hoja 'registros_telegram' para ordenar.");
+      return;
+    }
+
+    const filas = await sheet.getRows();
+    
+    // 1. Filtrar filas válidas (que tengan Municipio y Nodo válido) y extraer sus objetos de datos
+    const filasValidas = [];
+    for (const fila of filas) {
+      const municipio = (fila.get(COLUMNAS.MUNICIPIO) || "").trim();
+      const nodoStr = (fila.get(COLUMNAS.NODO) || "").trim();
+      const nodo = parseInt(nodoStr, 10);
+      
+      // Conservar solo si tiene municipio y nodo válido (no vacío ni 0)
+      if (municipio && nodoStr && !isNaN(nodo) && nodo > 0) {
+        const obj = fila.toObject();
+        filasValidas.push({
+          [COLUMNAS.MUNICIPIO]:           municipio,
+          [COLUMNAS.NODO]:                String(nodo),
+          [COLUMNAS.TOTAL_VERIFICADORES]: obj[COLUMNAS.TOTAL_VERIFICADORES] || "0",
+          [COLUMNAS.BLOQUE_1]:            obj[COLUMNAS.BLOQUE_1] || "0",
+          [COLUMNAS.BLOQUE_2]:            obj[COLUMNAS.BLOQUE_2] || "0",
+          [COLUMNAS.BLOQUE_3]:            obj[COLUMNAS.BLOQUE_3] || "0",
+          [COLUMNAS.FECHA]:               obj[COLUMNAS.FECHA] || "",
+          [COLUMNAS.HORA]:                obj[COLUMNAS.HORA] || "",
+          [COLUMNAS.REMITENTE]:           obj[COLUMNAS.REMITENTE] || "",
+          [COLUMNAS.ID_MENSAJE]:          obj[COLUMNAS.ID_MENSAJE] || "",
+          [COLUMNAS.ID_CHAT]:             obj[COLUMNAS.ID_CHAT] || "",
+          [COLUMNAS.ESTADO]:              obj[COLUMNAS.ESTADO] || "",
+        });
+      }
+    }
+
+    // 2. Ordenar las filas: primero por Municipio (alfabético) y luego por Nodo (numérico)
+    filasValidas.sort((a, b) => {
+      const compMun = a[COLUMNAS.MUNICIPIO].localeCompare(b[COLUMNAS.MUNICIPIO]);
+      if (compMun !== 0) return compMun;
+      return parseInt(a[COLUMNAS.NODO], 10) - parseInt(b[COLUMNAS.NODO], 10);
+    });
+
+    console.log(`[INFO] Re-escribiendo ${filasValidas.length} filas ordenadas en 'registros_telegram'...`);
+    
+    // 3. Limpiar la hoja por completo (elimina celdas y filas vacías intermedias)
+    await sheet.clear();
+    
+    // 4. Escribir las cabeceras canónicas
+    await sheet.setHeaderRow([
+      COLUMNAS.MUNICIPIO,
+      COLUMNAS.NODO,
+      COLUMNAS.TOTAL_VERIFICADORES,
+      COLUMNAS.BLOQUE_1,
+      COLUMNAS.BLOQUE_2,
+      COLUMNAS.BLOQUE_3,
+      COLUMNAS.FECHA,
+      COLUMNAS.HORA,
+      COLUMNAS.REMITENTE,
+      COLUMNAS.ID_MENSAJE,
+      COLUMNAS.ID_CHAT,
+      COLUMNAS.ESTADO
+    ]);
+
+    // 5. Agregar las filas ordenadas y limpias en lote
+    if (filasValidas.length > 0) {
+      await sheet.addRows(filasValidas);
+    }
+
+    console.log("[INFO] Limpieza y ordenamiento de la hoja principal completado con éxito.");
+  } catch (err) {
+    console.error("[ERROR] Falló el ordenamiento y limpieza de la hoja principal:", err);
+  }
+}
+
+/**
  * Inicializa la hoja principal con una fila fija por cada nodo del catálogo
  * 'verificadores_nodo'. Si una fila para ese nodo ya existe, no hace nada.
  * Esta función debe llamarse al arrancar el bot.

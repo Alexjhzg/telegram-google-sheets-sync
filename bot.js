@@ -10,7 +10,8 @@ import { registrarHandlers }        from "./src/handlers/message.js";
 import { programarLimpieza }        from "./src/jobs/cleanup.js";
 import { obtenerHojaDeCalculo,
          inicializarHojaConNodos,
-         resetearFilasDeDiasAnteriores }  from "./src/services/sheets.js";
+         resetearFilasDeDiasAnteriores,
+         ordenarYLimpiarHojaPrincipal }  from "./src/services/sheets.js";
 
 // ── Instanciar el bot ───────────────────────────────────────────
 const bot = new Bot(config.telegram.token);
@@ -50,11 +51,12 @@ bot.start({
   onStart: async (info) => {
     console.log(`[INFO] Bot @${info.username} en línea y escuchando mensajes.`);
 
-    // Inicializar hoja con filas fijas de nodos y limpiar registros de días anteriores
+    // Inicializar hoja con filas fijas de nodos, limpiar registros de días anteriores, y ordenar
     try {
       const doc = await obtenerHojaDeCalculo();
       await inicializarHojaConNodos(doc);
       await resetearFilasDeDiasAnteriores(doc);
+      await ordenarYLimpiarHojaPrincipal(doc);
     } catch (err) {
       console.error("[ERROR] Fallo al inicializar y limpiar la hoja de cálculo:", err);
     }

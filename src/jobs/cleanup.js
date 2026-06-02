@@ -1,6 +1,6 @@
 import { Cron } from "croner";
 import { config } from "../config/index.js";
-import { obtenerHojaDeCalculo, COLUMNAS, buscarFilaPorMensaje, resetearFila, resetearFilasDeDiasAnteriores, guardarHistoricoDiario } from "../services/sheets.js";
+import { obtenerHojaDeCalculo, COLUMNAS, buscarFilaPorMensaje, resetearFila, resetearFilasDeDiasAnteriores, guardarHistoricoDiario, ordenarYLimpiarHojaPrincipal } from "../services/sheets.js";
 
 /**
  * Verifica si un mensaje de Telegram sigue existiendo intentando
@@ -426,6 +426,7 @@ export function programarLimpieza(api) {
     try {
       const doc = await obtenerHojaDeCalculo();
       await resetearFilasDeDiasAnteriores(doc);
+      await ordenarYLimpiarHojaPrincipal(doc);
     } catch (err) {
       console.error("[ERROR] Fallo en el reseteo diario de medianoche:", err);
     }
