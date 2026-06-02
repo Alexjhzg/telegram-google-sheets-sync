@@ -22,20 +22,28 @@ export function calcularAcumulacion(bloqueActivo, reporte, historial) {
   const tieneBloquesEspecificos = (bloque1 > 0 || bloque2 > 0 || bloque3 > 0);
 
   if (tieneBloquesEspecificos) {
-    // Si contiene valores específicos, actualizamos cada bloque que esté "abierto" (activo o futuro)
-    // Pasado queda bloqueado (congelado en su valor histórico)
+    // Si contiene valores específicos, actualizamos cada bloque aplicando "Futuro Abierto / Pasado Bloqueado"
     if (bloqueActivo === 1) {
-      // 9am Activo: 9am, 2pm y 6pm están ABIERTOS (futuros)
+      // 9am Activo: 9am, 2pm y 6pm están ABIERTOS (futuros). No hay bloqueados.
       b1Final = bloque1;
       b2Final = bloque2;
       b3Final = bloque3;
     } else if (bloqueActivo === 2) {
-      // 2pm Activo: 9am está CERRADO (LOCKED). 2pm y 6pm están ABIERTOS
-      b2Final = bloque2;
+      // 2pm Activo: 9am está CERRADO (LOCKED). 2pm y 6pm están ABIERTOS.
+      
+      // Calcular diferencia tardía de B1: si reporta más de lo que ya hay en Sheets, redirigimos el extra
+      const diffB1 = Math.max(0, bloque1 - historial.b1);
+
+      b2Final = bloque2 + diffB1;
       b3Final = bloque3;
     } else if (bloqueActivo === 3) {
-      // 6pm Activo: 9am y 2pm están CERRADOS (LOCKED). 6pm está ABIERTO
-      b3Final = bloque3;
+      // 6pm Activo: 9am y 2pm están CERRADOS (LOCKED). 6pm está ABIERTO.
+      
+      // Calcular diferencias tardías de B1 y B2
+      const diffB1 = Math.max(0, bloque1 - historial.b1);
+      const diffB2 = Math.max(0, bloque2 - historial.b2);
+
+      b3Final = bloque3 + diffB1 + diffB2;
     }
   } else {
     // Si no tiene bloques específicos pero sí un valor genérico (Total Verificadores),
