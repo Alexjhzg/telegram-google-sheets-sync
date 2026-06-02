@@ -55,18 +55,28 @@ export async function enviarReporteDiario(api, corte = 3) {
     const pct9am   = ((v9am / limite) * 100).toFixed(2).replace(".", ",");
     const pct2pm   = ((v2pm / limite) * 100).toFixed(2).replace(".", ",");
     const pct6pm   = ((v6pm / limite) * 100).toFixed(2).replace(".", ",");
-    const pctTotal = ((vTotal / limite) * 100).toFixed(2).replace(".", ",");
+
+    // Formatear las líneas de los cortes de forma dinámica
+    const linea9am = `9:00 am ${v9am}/${limite} = ${pct9am}%`;
+    const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm /${limite}`;
+    const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm /${limite}`;
+
+    // Calcular acumulado de campo dinámicamente según el corte para no mostrar el acumulado global de la jornada completa
+    let vAcumulado = 0;
+    if (corte === 1) {
+      vAcumulado = v9am;
+    } else if (corte === 2) {
+      vAcumulado = v9am + v2pm;
+    } else {
+      vAcumulado = vTotal; // Corte de cierre (final de la jornada)
+    }
+    const pctAcumulado = ((vAcumulado / limite) * 100).toFixed(2).replace(".", ",");
 
     // Obtener el día de la semana actual en español (Zona Horaria Venezuela)
     const opcionesDia = { timeZone: "America/Caracas", weekday: "long" };
     const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
     // Capitalizar el día (ej: "Lunes")
     const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
-
-    // Formatear las líneas de los cortes de forma dinámica
-    const linea9am = `9:00 am ${v9am}/${limite} = ${pct9am}%`;
-    const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm`;
-    const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm`;
 
     const mensaje =
       `${diaSemana}\n\n` +
@@ -75,7 +85,7 @@ export async function enviarReporteDiario(api, corte = 3) {
       `${linea9am}\n` +
       `${linea2pm}\n` +
       `${linea6pm}\n` +
-      `Acumulado campo ${vTotal}/${limite} = ${pctTotal}%`;
+      `Acumulado campo ${vAcumulado}/${limite} = ${pctAcumulado}%`;
 
     // Buscar el Chat ID para enviar el reporte
     let chatId = process.env.TELEGRAM_REPORT_CHAT_ID;
