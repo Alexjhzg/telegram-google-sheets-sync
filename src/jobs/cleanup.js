@@ -227,6 +227,64 @@ export async function enviarReporteDiario(api, corte = 3) {
   }
 }
 
+/**
+ * Envía el aviso de cierre del bloque de forma llamativa al canal/grupo.
+ *
+ * @param {import("grammy").Api} api - API del bot de Telegram.
+ * @param {number} corte - El corte: 1 para 9:00 am, 2 para 2:00 pm, 3 para 6:00 pm.
+ */
+export async function enviarAvisoCierre(api, corte) {
+  console.log(`[INFO] Iniciando envío de aviso de cierre para el corte ${corte}...`);
+  try {
+    let mensaje = "";
+    if (corte === 1) {
+      mensaje = 
+        `🔴 *Corte de las 9:00 am CERRADO*\n` +
+        `🟢 *Bloque de las 2:00 pm ACTIVO*\n\n` +
+        `Cualquier dato recibido de ahora en adelante se debe asignar al bloque de las 2pm y 6pm.`;
+    } else if (corte === 2) {
+      mensaje = 
+        `🔴 *Corte de las 2:00 pm CERRADO*\n` +
+        `🟢 *Bloque de las 6:00 pm ACTIVO*\n\n` +
+        `Cualquier dato recibido de ahora en adelante se asignará al bloque de las 6pm.`;
+    } else if (corte === 3) {
+      mensaje = 
+        `🔴 *Corte de las 6:00 pm CERRADO*\n` +
+        `🏁 *Cierre de jornada de hoy completado*`;
+    }
+
+    // Buscar el Chat ID para enviar el aviso
+    let chatId = process.env.TELEGRAM_REPORT_CHAT_ID;
+    if (!chatId) {
+      try {
+        const doc = await obtenerHojaDeCalculo();
+        const sheetPrincipal = doc.sheetsByTitle["registros_telegram"];
+        const rowsPrincipal = await sheetPrincipal.getRows();
+        for (const row of rowsPrincipal) {
+          const cId = row.get(COLUMNAS.ID_CHAT);
+          if (cId) {
+            chatId = cId;
+            break;
+          }
+        }
+      } catch (e) {
+        console.error("[ERROR] No se pudo obtener Chat ID de la hoja para aviso de cierre:", e);
+      }
+    }
+
+    // Fallback si no hay registros aún
+    if (!chatId) {
+      chatId = -1003785032543;
+    }
+
+    console.log(`[INFO] Enviando aviso de cierre (Corte: ${corte}) al Chat ID: ${chatId}`);
+    await api.sendMessage(chatId, mensaje, { parse_mode: "Markdown" });
+    console.log(`[INFO] Aviso de cierre del corte ${corte} enviado con éxito.`);
+  } catch (err) {
+    console.error(`[ERROR] Falló el envío del aviso de cierre del corte ${corte}:`, err);
+  }
+}
+
 export function programarLimpieza(api) {
   // 1. Limpieza inicial al arrancar el bot (últimas 60 filas)
   setTimeout(() => ejecutarLimpieza(api, 60), config.app.cleanupInitialDelayMs);
@@ -258,7 +316,17 @@ export function programarLimpieza(api) {
   // 6:05 PM (Corte 3)
   const jobReporte6pm = new Cron("5 18 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 3));
 
-  // 6. Resguardo de historial diario a las 11:00 PM (23:00 VET)
+  // 6. Envíos automáticos de los avisos de cierre exactamente a las horas de corte (hora de Venezuela)
+  // 9:00 AM (Aviso Corte 1)
+  new Cron("0 9 * * *", { timezone: "America/Caracas" }, () => enviarAvisoCierre(api, 1));
+
+  // 2:00 PM (Aviso Corte 2)
+  new Cron("0 14 * * *", { timezone: "America/Caracas" }, () => enviarAvisoCierre(api, 2));
+
+  // 6:00 PM (Aviso Corte 3)
+  new Cron("0 18 * * *", { timezone: "America/Caracas" }, () => enviarAvisoCierre(api, 3));
+
+  // 7. Resguardo de historial diario a las 11:00 PM (23:00 VET)
   const jobHistorico = new Cron("0 23 * * *", { timezone: "America/Caracas" }, async () => {
     console.log("[INFO] Iniciando resguardo de historial diario a las 11:00 PM VET...");
     try {
