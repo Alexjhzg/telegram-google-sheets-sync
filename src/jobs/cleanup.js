@@ -285,6 +285,90 @@ export async function enviarAvisoCierre(api, corte) {
   }
 }
 
+/**
+ * Escanea la base de datos de Sheets y envía una alerta grupal listando todos los nodos
+ * que finalizaron la jornada de hoy con 0 verificadores reportados (nodos sin actividad).
+ *
+ * @param {import("grammy").Api} api - API del bot de Telegram.
+ */
+export async function enviarAvisoNodosFaltantes(api) {
+  console.log("[INFO] Iniciando generación de aviso de nodos sin reporte...");
+  try {
+    const doc = await obtenerHojaDeCalculo();
+    const sheet = doc.sheetsByTitle["registros_telegram"];
+    if (!sheet) {
+      console.error("[ERROR] No se encontró la hoja 'registros_telegram' para verificar nodos faltantes.");
+      return;
+    }
+
+    const filas = await sheet.getRows();
+
+    // Agrupar los nodos con totalVerificadores === 0 por municipio
+    const faltantesPorMunicipio = {};
+    let totalFaltantes = 0;
+
+    for (const fila of filas) {
+      const municipio = (fila.get(COLUMNAS.MUNICIPIO) || "").trim();
+      const nodo = (fila.get(COLUMNAS.NODO) || "").trim();
+      
+      // Consideramos un nodo sin reporte si su Total Verificadores es 0
+      const totalVerificadores = parseInt(fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0", 10);
+
+      if (municipio && nodo && totalVerificadores === 0) {
+        if (!faltantesPorMunicipio[municipio]) {
+          faltantesPorMunicipio[municipio] = [];
+        }
+        faltantesPorMunicipio[municipio].push(nodo);
+        totalFaltantes++;
+      }
+    }
+
+    // Si todos los nodos reportaron, no mandamos nada
+    if (totalFaltantes === 0) {
+      console.log("[INFO] Todos los nodos han reportado hoy. No se envía aviso de faltantes.");
+      return;
+    }
+
+    // Construir el mensaje con excelente ortografía y maquetación
+    let mensaje = "⚠️ *NODOS SIN REPORTE REGISTRADO HOY*\n\n" +
+                  "Municipios y sus respectivos nodos sin actividad:\n\n";
+
+    // Ordenar municipios alfabéticamente
+    const municipiosOrdenados = Object.keys(faltantesPorMunicipio).sort((a, b) => a.localeCompare(b));
+
+    for (const municipio of municipiosOrdenados) {
+      // Ordenar los nodos numéricamente
+      const nodos = faltantesPorMunicipio[municipio].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const nodosStr = nodos.map(n => `Nodo ${n}`).join(" • ");
+      mensaje += `📍 *${municipio}* • ${nodosStr}\n\n`;
+    }
+
+    mensaje += "📝 _Estaremos registrando estas incidencias._";
+
+    // Buscar el Chat ID para enviar el aviso
+    let chatId = process.env.TELEGRAM_REPORT_CHAT_ID;
+    if (!chatId) {
+      for (const row of filas) {
+        const cId = row.get(COLUMNAS.ID_CHAT);
+        if (cId) {
+          chatId = cId;
+          break;
+        }
+      }
+    }
+
+    if (!chatId) {
+      chatId = -1003785032543;
+    }
+
+    console.log(`[INFO] Enviando aviso de nodos faltantes al Chat ID: ${chatId}`);
+    await api.sendMessage(chatId, mensaje, { parse_mode: "Markdown" });
+    console.log("[INFO] Aviso de nodos faltantes enviado con éxito.");
+  } catch (err) {
+    console.error("[ERROR] Falló el envío del aviso de nodos faltantes:", err);
+  }
+}
+
 export function programarLimpieza(api) {
   // 1. Limpieza inicial al arrancar el bot (últimas 60 filas)
   setTimeout(() => ejecutarLimpieza(api, 60), config.app.cleanupInitialDelayMs);
@@ -326,7 +410,10 @@ export function programarLimpieza(api) {
   // 6:00 PM (Aviso Corte 3)
   new Cron("0 18 * * *", { timezone: "America/Caracas" }, () => enviarAvisoCierre(api, 3));
 
-  // 7. Resguardo de historial diario a las 11:00 PM (23:00 VET)
+  // 7. Aviso de nodos sin reporte (faltantes) a las 6:06 PM (hora de Venezuela)
+  new Cron("6 18 * * *", { timezone: "America/Caracas" }, () => enviarAvisoNodosFaltantes(api));
+
+  // 8. Resguardo de historial diario a las 11:00 PM (23:00 VET)
   const jobHistorico = new Cron("0 23 * * *", { timezone: "America/Caracas" }, async () => {
     console.log("[INFO] Iniciando resguardo de historial diario a las 11:00 PM VET...");
     try {
