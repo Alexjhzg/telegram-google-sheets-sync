@@ -13,30 +13,41 @@
 export function calcularAcumulacion(bloqueActivo, reporte, historial) {
   const { totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
 
-  // Extraer el valor numérico correspondiente al bloque activo prioritariamente, con fallback
-  let valorReportado = 0;
-  if (bloqueActivo === 1) {
-    valorReportado = bloque1 || totalVerificadores || bloque2 || bloque3 || 0;
-  } else if (bloqueActivo === 2) {
-    valorReportado = bloque2 || totalVerificadores || bloque1 || bloque3 || 0;
-  } else if (bloqueActivo === 3) {
-    valorReportado = bloque3 || totalVerificadores || bloque1 || bloque2 || 0;
-  }
-
-  // Inicializar acumulaciones finales con los valores históricos (los bloques pasados y futuros se quedan congelados)
+  // Inicializar acumulaciones finales con los valores históricos
   let b1Final = historial.b1;
   let b2Final = historial.b2;
   let b3Final = historial.b3;
 
-  if (bloqueActivo === 1) {
-    // Bloque 1 activo: solo se permite escribir en B1
-    b1Final = valorReportado;
-  } else if (bloqueActivo === 2) {
-    // Bloque 2 activo: solo se permite escribir en B2 (B1 pasado queda bloqueado)
-    b2Final = valorReportado;
-  } else if (bloqueActivo === 3) {
-    // Bloque 3 activo: solo se permite escribir en B3 (B1 y B2 pasados quedan bloqueados)
-    b3Final = valorReportado;
+  // Determinar si el mensaje contiene valores explícitos para algún bloque específico
+  const tieneBloquesEspecificos = (bloque1 > 0 || bloque2 > 0 || bloque3 > 0);
+
+  if (tieneBloquesEspecificos) {
+    // Si contiene valores específicos, actualizamos cada bloque que esté "abierto" (activo o futuro)
+    // Pasado queda bloqueado (congelado en su valor histórico)
+    if (bloqueActivo === 1) {
+      // 9am Activo: 9am, 2pm y 6pm están ABIERTOS (futuros)
+      b1Final = bloque1;
+      b2Final = bloque2;
+      b3Final = bloque3;
+    } else if (bloqueActivo === 2) {
+      // 2pm Activo: 9am está CERRADO (LOCKED). 2pm y 6pm están ABIERTOS
+      b2Final = bloque2;
+      b3Final = bloque3;
+    } else if (bloqueActivo === 3) {
+      // 6pm Activo: 9am y 2pm están CERRADOS (LOCKED). 6pm está ABIERTO
+      b3Final = bloque3;
+    }
+  } else {
+    // Si no tiene bloques específicos pero sí un valor genérico (Total Verificadores),
+    // se aplica la regla de fallback clásico asignándolo únicamente al bloque activo.
+    const valorGenerico = totalVerificadores || 0;
+    if (bloqueActivo === 1) {
+      b1Final = valorGenerico;
+    } else if (bloqueActivo === 2) {
+      b2Final = valorGenerico;
+    } else if (bloqueActivo === 3) {
+      b3Final = valorGenerico;
+    }
   }
 
   return { b1Final, b2Final, b3Final };
