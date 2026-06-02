@@ -51,14 +51,14 @@ bot.start({
   onStart: async (info) => {
     console.log(`[INFO] Bot @${info.username} en línea y escuchando mensajes.`);
 
-    // Inicializar hoja con filas fijas de nodos, limpiar registros de días anteriores, y ordenar
+    // Inicializar hoja con filas fijas de nodos, limpiar registros de días anteriores y reordenar/sanear la hoja
     try {
       const doc = await obtenerHojaDeCalculo();
       await inicializarHojaConNodos(doc);
       await resetearFilasDeDiasAnteriores(doc);
       await ordenarYLimpiarHojaPrincipal(doc);
     } catch (err) {
-      console.error("[ERROR] Fallo al inicializar y limpiar la hoja de cálculo:", err);
+      console.error("[ERROR] Fallo al inicializar, limpiar y ordenar la hoja de cálculo:", err);
     }
 
     // Iniciar tareas en segundo plano (acceso a la API de Telegram vía bot.api)
