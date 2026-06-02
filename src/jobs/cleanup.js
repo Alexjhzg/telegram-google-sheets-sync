@@ -329,7 +329,48 @@ export async function enviarAvisoNodosFaltantes(api) {
       return;
     }
 
-    // Construir el mensaje con excelente ortografía y maquetación
+    // 1. Guardar histórico en Google Sheets (Hoja: 'nodos_sin_reportes')
+    console.log("[INFO] Guardando registro de incidencias en 'nodos_sin_reportes'...");
+    try {
+      let sheetSinReportes = doc.sheetsByTitle["nodos_sin_reportes"];
+      if (!sheetSinReportes) {
+        console.log("[INFO] Creando la hoja 'nodos_sin_reportes' ya que no existía...");
+        sheetSinReportes = await doc.addSheet({
+          title: "nodos_sin_reportes"
+        });
+      }
+
+      // Asegurar cabeceras de la hoja
+      try {
+        await sheetSinReportes.loadHeaderRow();
+      } catch (errHeader) {
+        console.log("[INFO] Inicializando cabeceras en 'nodos_sin_reportes'...");
+        await sheetSinReportes.setHeaderRow(["Fecha", "Municipio", "Nodo"]);
+      }
+
+      const opts = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
+      const hoyStr = new Date().toLocaleDateString("es-VE", opts);
+
+      const filasNuevas = [];
+      for (const municipio of Object.keys(faltantesPorMunicipio)) {
+        for (const nodo of faltantesPorMunicipio[municipio]) {
+          filasNuevas.push({
+            "Fecha": hoyStr,
+            "Municipio": municipio,
+            "Nodo": String(nodo)
+          });
+        }
+      }
+
+      if (filasNuevas.length > 0) {
+        await sheetSinReportes.addRows(filasNuevas);
+        console.log(`[INFO] Se guardaron exitosamente ${filasNuevas.length} registros en 'nodos_sin_reportes'.`);
+      }
+    } catch (errSheet) {
+      console.error("[ERROR] Falló el guardado histórico en la hoja 'nodos_sin_reportes':", errSheet);
+    }
+
+    // 2. Construir el mensaje con excelente ortografía y maquetación para Telegram
     let mensaje = "⚠️ *NODOS SIN REPORTE REGISTRADO HOY*\n\n" +
                   "Municipios y sus respectivos nodos sin actividad:\n\n";
 
