@@ -114,6 +114,9 @@ export async function resetearFila(fila) {
  * @returns {Promise<number>} Número de filas reseteadas.
  */
 export async function resetearFilasDeDiasAnteriores(doc) {
+  // Asegurar resguardo preventivo de los datos antes de eliminarlos
+  await guardarHistoricoDiario(doc);
+
   const hoja = doc.sheetsByTitle["registros_telegram"];
   const filas = await hoja.getRows();
 
@@ -153,6 +156,22 @@ export async function guardarHistoricoDiario(doc) {
   const hojaPrincipal = doc.sheetsByTitle["registros_telegram"];
   const filas = await hojaPrincipal.getRows();
 
+  // 1. Identificar la fecha real de los reportes en la hoja principal
+  let fechaReporte = "";
+  for (const fila of filas) {
+    const fVal = (fila.get(COLUMNAS.FECHA) || "").trim();
+    if (fVal) {
+      fechaReporte = fVal;
+      break;
+    }
+  }
+
+  // Si no hay ninguna fila con fecha, significa que no hay datos para respaldar
+  if (!fechaReporte) {
+    console.log("[INFO] No se encontraron reportes con fecha para respaldar. Omitiendo histórico.");
+    return;
+  }
+
   let sheetHistorica = doc.sheetsByTitle["registros_historicos_telegram"];
   if (!sheetHistorica) {
     console.log("[INFO] Creando la hoja 'registros_historicos_telegram' ya que no existía...");
@@ -182,19 +201,33 @@ export async function guardarHistoricoDiario(doc) {
     ]);
   }
 
-  const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
-  const hoyStr = new Date().toLocaleDateString("es-VE", opts);
+  // 2. Verificar si el histórico de esa fecha ya existe para evitar duplicados
+  const filasHistoricas = await sheetHistorica.getRows();
+  const yaExiste = filasHistoricas.some(f => (f.get(COLUMNAS.FECHA) || "").trim() === fechaReporte);
+  if (yaExiste) {
+    console.log(`[INFO] Los registros del día ${fechaReporte} ya están en el histórico. Omitiendo para evitar duplicados.`);
+    return;
+  }
 
-  const opcionesDia = { timeZone: config.app.timezone, weekday: "long" };
-  const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
-  const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
+  // 3. Obtener el día de la semana correspondiente a la fecha de los datos
+  let diaSemana = "";
+  try {
+    const partes = fechaReporte.split("/");
+    const fechaObj = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1, parseInt(partes[0], 10));
+    const opcionesDia = { timeZone: config.app.timezone, weekday: "long" };
+    const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(fechaObj);
+    diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
+  } catch (err) {
+    console.error("[WARNING] Error al calcular el día de la semana de la fecha:", fechaReporte, err);
+    diaSemana = "Desconocido";
+  }
 
   const filaVacia = {
     [COLUMNAS.MUNICIPIO]: ""
   };
 
   const filaFecha = {
-    [COLUMNAS.MUNICIPIO]: `--- HISTORIAL DEL DÍA: ${diaSemana}, ${hoyStr} ---`
+    [COLUMNAS.MUNICIPIO]: `--- HISTORIAL DEL DÍA: ${diaSemana}, ${fechaReporte} ---`
   };
 
   const filasDatos = filas.map(f => {
@@ -217,7 +250,7 @@ export async function guardarHistoricoDiario(doc) {
 
   // Guardar en bloque para mayor velocidad y menor uso de cuota de la API
   await sheetHistorica.addRows([filaVacia, filaFecha, ...filasDatos]);
-  console.log(`[INFO] Historial diario guardado con éxito. Se copiaron ${filasDatos.length} filas.`);
+  console.log(`[INFO] Historial diario de la fecha ${fechaReporte} guardado con éxito. Se copiaron ${filasDatos.length} filas.`);
 }
 
 // inicializarHojaConNodos y ordenarYLimpiarHojaPrincipal han sido movidas
