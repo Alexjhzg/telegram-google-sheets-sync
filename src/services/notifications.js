@@ -131,16 +131,24 @@ export async function enviarAvisoNodosFaltantes(api) {
       const opts = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
       const hoyStr = new Date().toLocaleDateString("es-VE", opts);
 
-      const filasNuevas = [];
-      for (const municipio of Object.keys(faltantesPorMunicipio)) {
-        for (const nodo of faltantesPorMunicipio[municipio]) {
-          filasNuevas.push({ "Fecha": hoyStr, "Municipio": municipio, "Nodo": String(nodo) });
-        }
-      }
+      // Verificar si ya existen registros del día de hoy en nodos_sin_reportes
+      const filasExistentes = await sheetSinReportes.getRows();
+      const yaExiste = filasExistentes.some(f => (f.get("Fecha") || "").trim() === hoyStr);
 
-      if (filasNuevas.length > 0) {
-        await sheetSinReportes.addRows(filasNuevas);
-        console.log(`[INFO] Se guardaron exitosamente ${filasNuevas.length} registros en 'nodos_sin_reportes'.`);
+      if (yaExiste) {
+        console.log(`[INFO] Los registros de nodos sin reporte para el día ${hoyStr} ya están guardados. Omitiendo duplicados.`);
+      } else {
+        const filasNuevas = [];
+        for (const municipio of Object.keys(faltantesPorMunicipio)) {
+          for (const nodo of faltantesPorMunicipio[municipio]) {
+            filasNuevas.push({ "Fecha": hoyStr, "Municipio": municipio, "Nodo": String(nodo) });
+          }
+        }
+
+        if (filasNuevas.length > 0) {
+          await sheetSinReportes.addRows(filasNuevas);
+          console.log(`[INFO] Se guardaron exitosamente ${filasNuevas.length} registros en 'nodos_sin_reportes'.`);
+        }
       }
     } catch (errSheet) {
       console.error("[ERROR] Falló el guardado histórico en la hoja 'nodos_sin_reportes':", errSheet);
