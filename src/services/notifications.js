@@ -96,8 +96,11 @@ export async function enviarAvisoNodosFaltantes(api) {
       const municipio = (fila.get(COLUMNAS.MUNICIPIO) || "").trim();
       const nodo = (fila.get(COLUMNAS.NODO) || "").trim();
       const totalVerificadores = parseInt(fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0", 10);
+      const idMensaje = (fila.get(COLUMNAS.ID_MENSAJE) || "").trim();
+      const fecha = (fila.get(COLUMNAS.FECHA) || "").trim();
 
-      if (municipio && nodo && totalVerificadores === 0) {
+      // Se considera nodo faltante si tiene 0 verificadores Y además no tiene ningún reporte registrado (sin ID de mensaje y sin fecha)
+      if (municipio && nodo && totalVerificadores === 0 && !idMensaje && !fecha) {
         if (!faltantesPorMunicipio[municipio]) {
           faltantesPorMunicipio[municipio] = [];
         }
