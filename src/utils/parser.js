@@ -79,14 +79,14 @@ export function obtenerBloqueYHoraActivo(timestamp) {
 
   const minutosDelDia = hourVE * 60 + minuteVE;
 
-  // Determinar bloque activo
+  // Determinar bloque activo en base al inicio de jornada a las 6:00 am (360 minutos)
   let bloqueActivo;
-  if (minutosDelDia >= 420 && minutosDelDia <= 540) {
-    bloqueActivo = 1; // 9am
+  if (minutosDelDia >= 360 && minutosDelDia <= 540) {
+    bloqueActivo = 1; // 9am (Desde las 6:00 am hasta las 9:00 am VET)
   } else if (minutosDelDia > 540 && minutosDelDia <= 840) {
-    bloqueActivo = 2; // 2pm
+    bloqueActivo = 2; // 2pm (Desde las 9:01 am hasta las 2:00 pm VET)
   } else {
-    bloqueActivo = 3; // 6pm
+    bloqueActivo = 3; // 6pm (Desde las 2:01 pm de la tarde hasta las 5:59 am de la madrugada del día siguiente)
   }
 
   const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
