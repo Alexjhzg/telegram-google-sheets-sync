@@ -114,19 +114,31 @@ export async function resetearFila(fila) {
  * @returns {Promise<number>} Número de filas reseteadas.
  */
 export async function resetearFilasDeDiasAnteriores(doc) {
-  // Asegurar resguardo preventivo de los datos antes de eliminarlos
-  await guardarHistoricoDiario(doc);
-
   const hoja = doc.sheetsByTitle["registros_telegram"];
   const filas = await hoja.getRows();
 
   const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
   const hoyStr = new Date().toLocaleDateString("es-VE", opts);
 
+  // 1. Identificar si hay fechas de días anteriores en la hoja principal
+  const fechasAnteriores = new Set();
+  for (const fila of filas) {
+    const fechaFila = (fila.get(COLUMNAS.FECHA) || "").trim();
+    if (fechaFila && fechaFila !== hoyStr) {
+      fechasAnteriores.add(fechaFila);
+    }
+  }
+
+  // 2. Para cada fecha anterior detectada, resguardarla preventivamente en el histórico antes de borrarla
+  for (const fechaAnterior of fechasAnteriores) {
+    console.log(`[INFO] Detectada fecha de día anterior (${fechaAnterior}) en la hoja principal. Ejecutando resguardo preventivo...`);
+    await guardarHistoricoDiario(doc, fechaAnterior);
+  }
+
+  // 3. Resetear únicamente las filas que pertenecen a esos días anteriores
   let reseteadas = 0;
   for (const fila of filas) {
     const fechaFila = (fila.get(COLUMNAS.FECHA) || "").trim();
-    // Si la fila tiene una fecha registrada y no es el día de hoy, se resetea.
     if (fechaFila && fechaFila !== hoyStr) {
       const municipio = fila.get(COLUMNAS.MUNICIPIO);
       const nodo = fila.get(COLUMNAS.NODO);
@@ -145,28 +157,31 @@ export async function resetearFilasDeDiasAnteriores(doc) {
 }
 
 /**
- * Guarda todos los registros actuales de registros_telegram en la hoja registros_historicos_telegram,
- * agregando una fila de cabecera con la fecha actual de Venezuela para separar e identificar el día.
+ * Guarda todos los registros correspondientes a una fecha específica en la hoja registros_historicos_telegram.
+ * Si no se especifica una fecha, busca la primera fecha disponible en las filas (usado para el cron de la noche).
  *
  * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
+ * @param {string|null} fechaEspecifica - Fecha a respaldar (ej: "03/06/2026")
  */
-export async function guardarHistoricoDiario(doc) {
+export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
   console.log("[INFO] Guardando histórico diario en la hoja 'registros_historicos_telegram'...");
   
   const hojaPrincipal = doc.sheetsByTitle["registros_telegram"];
   const filas = await hojaPrincipal.getRows();
 
-  // 1. Identificar la fecha real de los reportes en la hoja principal
-  let fechaReporte = "";
-  for (const fila of filas) {
-    const fVal = (fila.get(COLUMNAS.FECHA) || "").trim();
-    if (fVal) {
-      fechaReporte = fVal;
-      break;
+  // 1. Identificar la fecha real de los reportes a respaldar
+  let fechaReporte = fechaEspecifica;
+  if (!fechaReporte) {
+    for (const fila of filas) {
+      const fVal = (fila.get(COLUMNAS.FECHA) || "").trim();
+      if (fVal) {
+        fechaReporte = fVal;
+        break;
+      }
     }
   }
 
-  // Si no hay ninguna fila con fecha, significa que no hay datos para respaldar
+  // Si no hay ninguna fecha que respaldar, salimos
   if (!fechaReporte) {
     console.log("[INFO] No se encontraron reportes con fecha para respaldar. Omitiendo histórico.");
     return;
@@ -180,7 +195,7 @@ export async function guardarHistoricoDiario(doc) {
     });
   }
 
-  // Asegurar cabeceras si la hoja está recién creada o vacía
+  // Asegurar cabeceras
   try {
     await sheetHistorica.loadHeaderRow();
   } catch (err) {
@@ -209,47 +224,47 @@ export async function guardarHistoricoDiario(doc) {
     return;
   }
 
-  // 3. Obtener el día de la semana correspondiente a la fecha de los datos
-  let diaSemana = "";
-  try {
-    const partes = fechaReporte.split("/");
-    const fechaObj = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1, parseInt(partes[0], 10));
-    const opcionesDia = { timeZone: config.app.timezone, weekday: "long" };
-    const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(fechaObj);
-    diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
-  } catch (err) {
-    console.error("[WARNING] Error al calcular el día de la semana de la fecha:", fechaReporte, err);
-    diaSemana = "Desconocido";
-  }
-
-  const filaVacia = {
-    [COLUMNAS.MUNICIPIO]: ""
-  };
-
-  const filaFecha = {
-    [COLUMNAS.MUNICIPIO]: `--- HISTORIAL DEL DÍA: ${diaSemana}, ${fechaReporte} ---`
-  };
-
+  // 3. Mapear los datos. Si la fila es del día a respaldar, copiamos sus datos reales.
+  // Si es de otra fecha (por ejemplo, ya reportaron hoy) o está vacía, la guardamos con 0 para este histórico.
   const filasDatos = filas.map(f => {
     const obj = f.toObject();
-    return {
-      [COLUMNAS.MUNICIPIO]: obj[COLUMNAS.MUNICIPIO] || "",
-      [COLUMNAS.NODO]: obj[COLUMNAS.NODO] || "",
-      [COLUMNAS.TOTAL_VERIFICADORES]: obj[COLUMNAS.TOTAL_VERIFICADORES] || "",
-      [COLUMNAS.BLOQUE_1]: obj[COLUMNAS.BLOQUE_1] || "",
-      [COLUMNAS.BLOQUE_2]: obj[COLUMNAS.BLOQUE_2] || "",
-      [COLUMNAS.BLOQUE_3]: obj[COLUMNAS.BLOQUE_3] || "",
-      [COLUMNAS.FECHA]: obj[COLUMNAS.FECHA] || "",
-      [COLUMNAS.HORA]: obj[COLUMNAS.HORA] || "",
-      [COLUMNAS.REMITENTE]: obj[COLUMNAS.REMITENTE] || "",
-      [COLUMNAS.ID_MENSAJE]: obj[COLUMNAS.ID_MENSAJE] || "",
-      [COLUMNAS.ID_CHAT]: obj[COLUMNAS.ID_CHAT] || "",
-      [COLUMNAS.ESTADO]: obj[COLUMNAS.ESTADO] || ""
-    };
+    const esDeFechaResguardo = (obj[COLUMNAS.FECHA] || "").trim() === fechaReporte;
+
+    if (esDeFechaResguardo) {
+      return {
+        [COLUMNAS.MUNICIPIO]: obj[COLUMNAS.MUNICIPIO] || "",
+        [COLUMNAS.NODO]: obj[COLUMNAS.NODO] || "",
+        [COLUMNAS.TOTAL_VERIFICADORES]: obj[COLUMNAS.TOTAL_VERIFICADORES] || "",
+        [COLUMNAS.BLOQUE_1]: obj[COLUMNAS.BLOQUE_1] || "",
+        [COLUMNAS.BLOQUE_2]: obj[COLUMNAS.BLOQUE_2] || "",
+        [COLUMNAS.BLOQUE_3]: obj[COLUMNAS.BLOQUE_3] || "",
+        [COLUMNAS.FECHA]: obj[COLUMNAS.FECHA] || "",
+        [COLUMNAS.HORA]: obj[COLUMNAS.HORA] || "",
+        [COLUMNAS.REMITENTE]: obj[COLUMNAS.REMITENTE] || "",
+        [COLUMNAS.ID_MENSAJE]: obj[COLUMNAS.ID_MENSAJE] || "",
+        [COLUMNAS.ID_CHAT]: obj[COLUMNAS.ID_CHAT] || "",
+        [COLUMNAS.ESTADO]: obj[COLUMNAS.ESTADO] || ""
+      };
+    } else {
+      return {
+        [COLUMNAS.MUNICIPIO]: obj[COLUMNAS.MUNICIPIO] || "",
+        [COLUMNAS.NODO]: obj[COLUMNAS.NODO] || "",
+        [COLUMNAS.TOTAL_VERIFICADORES]: "0",
+        [COLUMNAS.BLOQUE_1]: "0",
+        [COLUMNAS.BLOQUE_2]: "0",
+        [COLUMNAS.BLOQUE_3]: "0",
+        [COLUMNAS.FECHA]: fechaReporte,
+        [COLUMNAS.HORA]: "",
+        [COLUMNAS.REMITENTE]: "",
+        [COLUMNAS.ID_MENSAJE]: "",
+        [COLUMNAS.ID_CHAT]: "",
+        [COLUMNAS.ESTADO]: ""
+      };
+    }
   });
 
-  // Guardar en bloque para mayor velocidad y menor uso de cuota de la API
-  await sheetHistorica.addRows([filaVacia, filaFecha, ...filasDatos]);
+  // Guardar en bloque plano justo debajo
+  await sheetHistorica.addRows(filasDatos);
   console.log(`[INFO] Historial diario de la fecha ${fechaReporte} guardado con éxito. Se copiaron ${filasDatos.length} filas.`);
 }
 
