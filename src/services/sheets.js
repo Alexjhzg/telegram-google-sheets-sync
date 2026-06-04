@@ -20,20 +20,34 @@ export const COLUMNAS = {
   ESTADO:             "Estado",
 };
 
+// Variable de módulo para almacenar la promesa de inicialización de la hoja (patrón Singleton)
+let docPromise = null;
+
 /**
- * Crea y autentica el cliente de Google Sheets.
+ * Crea, autentica y carga el cliente de Google Sheets una sola vez,
+ * reutilizando la conexión en las llamadas posteriores.
  * @returns {Promise<GoogleSpreadsheet>}
  */
 export async function obtenerHojaDeCalculo() {
-  const auth = new JWT({
-    email:  config.google.serviceAccountEmail,
-    key:    config.google.privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+  if (docPromise) {
+    return docPromise;
+  }
 
-  const doc = new GoogleSpreadsheet(config.google.spreadsheetId, auth);
-  await doc.loadInfo();
-  return doc;
+  docPromise = (async () => {
+    console.log("[INFO] Conectando y autenticando con Google Sheets...");
+    const auth = new JWT({
+      email:  config.google.serviceAccountEmail,
+      key:    config.google.privateKey,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+
+    const doc = new GoogleSpreadsheet(config.google.spreadsheetId, auth);
+    await doc.loadInfo();
+    console.log("[INFO] Conexión con Google Sheets establecida con éxito.");
+    return doc;
+  })();
+
+  return docPromise;
 }
 
 /**
