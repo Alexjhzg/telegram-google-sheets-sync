@@ -15,7 +15,7 @@ import { config } from "../config/index.js";
 export function parsearReporte(texto) {
   const regexMunicipio = /(?:Municipio|municipio)\*?\s*:\*?\s*([^*️\r\n\t]+)/i;
   const regexNodo      = /(?:Nodo|nodo)\*?\s*:\*?\s*(\d+)/i;
-  const regexTotal     = /(?:Total Verificadores en el nodo|Total Verificadores)\*?\s*:\*?\s*(\d+)/i;
+  const regexTotal     = /(?:Total\s*(?:de)?\s*Verificadores(?:\s*en\s*el\s*nodo)?)\*?\s*:\*?\s*(\d+)/i;
 
   // Anclas por hora de corte para máxima flexibilidad de formato (soporta opcionalmente paréntesis o corchetes alrededor del número)
   const regexBloque1   = /9\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?(\d+)?[\)\]\}]?/i;
