@@ -13,6 +13,12 @@
 export function calcularAcumulacion(bloqueActivo, reporte, historial) {
   const { totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
 
+  // Si el reporte indica explícitamente 0 verificadores en total y en todos los bloques,
+  // significa que no salieron a campo hoy, por lo que sobreescribimos e inicializamos todo a cero.
+  if (totalVerificadores === 0 && bloque1 === 0 && bloque2 === 0 && bloque3 === 0) {
+    return { b1Final: 0, b2Final: 0, b3Final: 0 };
+  }
+
   // Inicializar acumulaciones finales con los valores históricos
   let b1Final = historial.b1;
   let b2Final = historial.b2;
