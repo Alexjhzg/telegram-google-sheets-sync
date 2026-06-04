@@ -90,6 +90,44 @@ export function registrarHandlers(bot) {
         await marcarFilaParaRevision(null, messageId);
       }
       await reaccionar(ctx, "👎");
+
+      // Analizar qué campo faltó para enviar la alerta correspondiente
+      const tieneMunicipio = /(?:Municipio|municipio)\*?\s*:/i.test(texto);
+      const tieneNodo      = /(?:Nodo|nodo)\*?\s*:/i.test(texto);
+
+      let mensajeError = "";
+      if (!tieneMunicipio && !tieneNodo) {
+        mensajeError =
+          `⚠️ Reporte Rechazado: Formato inválido\n\n` +
+          `Hola ${remitente}, no he podido leer los datos de tu reporte. Asegúrate de incluir el Municipio y el número de Nodo.\n\n` +
+          `👉 Ejemplo de formato correcto:\n` +
+          `1. Municipio: Punceres\n` +
+          `2. Nodo: 16039\n` +
+          `3. Total de Verificadores en el nodo: 1\n` +
+          `➡️Bloque (1) 9am: 0\n` +
+          `➡️Bloque (2) 2pm: 0\n` +
+          `➡️Bloque (3) 6pm: 1`;
+      } else if (!tieneMunicipio) {
+        mensajeError =
+          `⚠️ Reporte Rechazado: Falta de Municipio\n\n` +
+          `Hola ${remitente}, tu reporte no incluye la línea de municipio (ej. Municipio: Punceres).\n\n` +
+          `👉 Por favor, edita tu mensaje o envíalo de nuevo incluyendo el municipio correspondiente.`;
+      } else if (!tieneNodo) {
+        mensajeError =
+          `⚠️ Reporte Rechazado: Falta de Nodo\n\n` +
+          `Hola ${remitente}, tu reporte no incluye la línea de nodo (ej. Nodo: 16039).\n\n` +
+          `👉 Por favor, edita tu mensaje o envíalo de nuevo indicando el número del nodo correspondiente.`;
+      }
+
+      if (mensajeError) {
+        try {
+          await ctx.reply(mensajeError, {
+            reply_parameters: { message_id: messageId }
+          });
+        } catch (err) {
+          console.error("[ERROR] No se pudo enviar el mensaje de alerta de formato:", err.message);
+        }
+      }
       return;
     }
 
