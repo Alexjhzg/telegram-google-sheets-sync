@@ -36,9 +36,9 @@ export function parsearReporte(texto) {
     municipio:         matchMunicipio[1].trim(),
     nodo:              parseInt(matchNodo[1], 10),
     totalVerificadores: matchTotal ? parseInt(matchTotal[1], 10) : 0,
-    bloque1:           (matchB1 && matchB1[1]) ? parseInt(matchB1[1], 10) : 0,
-    bloque2:           (matchB2 && matchB2[1]) ? parseInt(matchB2[1], 10) : 0,
-    bloque3:           (matchB3 && matchB3[1]) ? parseInt(matchB3[1], 10) : 0,
+    bloque1:           matchB1 ? ((matchB1[1] !== undefined) ? parseInt(matchB1[1], 10) : 0) : null,
+    bloque2:           matchB2 ? ((matchB2[1] !== undefined) ? parseInt(matchB2[1], 10) : 0) : null,
+    bloque3:           matchB3 ? ((matchB3[1] !== undefined) ? parseInt(matchB3[1], 10) : 0) : null,
   };
 }
 

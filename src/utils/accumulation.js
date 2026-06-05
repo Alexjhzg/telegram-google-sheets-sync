@@ -13,6 +13,14 @@
 export function calcularAcumulacion(bloqueActivo, reporte, historial) {
   const { totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
 
+  // Normalizar los valores de los bloques a enteros (0 por defecto) si fueron provistos
+  const b1Msg = bloque1 !== null ? bloque1 : 0;
+  const b2Msg = bloque2 !== null ? bloque2 : 0;
+  const b3Msg = bloque3 !== null ? bloque3 : 0;
+
+  // Identificar si el supervisor proveyó la estructura explícita de bloques en el mensaje
+  const tieneEstructuraBloques = (bloque1 !== null || bloque2 !== null || bloque3 !== null);
+
   // Inicializar acumulaciones finales con los valores históricos
   let b1Final = historial.b1;
   let b2Final = historial.b2;
@@ -21,26 +29,34 @@ export function calcularAcumulacion(bloqueActivo, reporte, historial) {
   // Lógica unificada de "Pasado Bloqueado / Presente y Futuro Abiertos":
   if (bloqueActivo === 1) {
     // 9am Activo: no hay pasado. B1 (presente), B2 y B3 (futuros) se actualizan.
-    b1Final = bloque1 || totalVerificadores || 0;
-    b2Final = bloque2 || 0;
-    b3Final = bloque3 || 0;
+    if (tieneEstructuraBloques) {
+      b1Final = b1Msg;
+      b2Final = b2Msg;
+      b3Final = b3Msg;
+    } else {
+      b1Final = totalVerificadores || 0;
+      b2Final = 0;
+      b3Final = 0;
+    }
   } else if (bloqueActivo === 2) {
     // 2pm Activo: B1 (pasado) es LOCKED. B2 (presente) y B3 (futuro) se actualizan.
-    const diffB1 = Math.max(0, (bloque1 || 0) - historial.b1);
-    
-    // Si el reporte trae bloques específicos, usamos bloque2. Si no, usamos el totalVerificadores.
-    const valorB2Reportado = (bloque1 > 0 || bloque2 > 0 || bloque3 > 0) ? bloque2 : totalVerificadores;
-    
-    b2Final = (valorB2Reportado || 0) + diffB1;
-    b3Final = bloque3 || 0;
+    if (tieneEstructuraBloques) {
+      const diffB1 = Math.max(0, b1Msg - historial.b1);
+      b2Final = b2Msg + diffB1;
+      b3Final = b3Msg;
+    } else {
+      b2Final = totalVerificadores || 0;
+      b3Final = 0;
+    }
   } else if (bloqueActivo === 3) {
     // 6pm Activo: B1 y B2 (pasados) son LOCKED. B3 (presente) se actualiza.
-    const diffB1 = Math.max(0, (bloque1 || 0) - historial.b1);
-    const diffB2 = Math.max(0, (bloque2 || 0) - historial.b2);
-    
-    const valorB3Reportado = (bloque1 > 0 || bloque2 > 0 || bloque3 > 0) ? bloque3 : totalVerificadores;
-    
-    b3Final = (valorB3Reportado || 0) + diffB1 + diffB2;
+    if (tieneEstructuraBloques) {
+      const diffB1 = Math.max(0, b1Msg - historial.b1);
+      const diffB2 = Math.max(0, b2Msg - historial.b2);
+      b3Final = b3Msg + diffB1 + diffB2;
+    } else {
+      b3Final = totalVerificadores || 0;
+    }
   }
 
   return { b1Final, b2Final, b3Final };
