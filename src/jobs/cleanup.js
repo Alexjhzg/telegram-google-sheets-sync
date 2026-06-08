@@ -8,6 +8,7 @@ import {
   resetearFila,
   resetearFilasDeDiasAnteriores,
   guardarHistoricoDiario,
+  sheetsMutex,
 } from "../services/sheets.js";
 import { ordenarYLimpiarHojaPrincipal } from "../services/sheets.business.js";
 import { enviarReporteDiario } from "../services/reporting.js";
@@ -63,68 +64,70 @@ async function mensajeExiste(api, chatId, messageId) {
  * @param {number} limiteFilas - Límite de filas más recientes a analizar.
  */
 export async function ejecutarLimpieza(api, limiteFilas = 15) {
-  console.log(`[INFO] Iniciando limpieza de mensajes eliminados en Telegram (límite: ${limiteFilas} filas)...`);
-  try {
-    const doc   = await obtenerHojaDeCalculo();
-    const hoja  = doc.sheetsByTitle["registros_telegram"];
-    const filas = await hoja.getRows();
+  return sheetsMutex.runExclusive(async () => {
+    console.log(`[INFO] Iniciando limpieza de mensajes eliminados en Telegram (límite: ${limiteFilas} filas)...`);
+    try {
+      const doc   = await obtenerHojaDeCalculo();
+      const hoja  = doc.sheetsByTitle["registros_telegram"];
+      const filas = await hoja.getRows();
 
-    let eliminados = 0;
-    let analizados = 0;
+      let eliminados = 0;
+      let analizados = 0;
 
-    // Iteramos en orden inverso para que los índices de Google Sheets no se desplacen
-    // cuando eliminamos una fila intermedia.
-    for (let i = filas.length - 1; i >= 0; i--) {
-      const fila      = filas[i];
-      const obj       = fila.toObject();
-      const messageId = parseInt(obj[COLUMNAS.ID_MENSAJE], 10);
-      const chatId    = parseInt(obj[COLUMNAS.ID_CHAT], 10);
+      // Iteramos en orden inverso para que los índices de Google Sheets no se desplacen
+      // cuando eliminamos una fila intermedia.
+      for (let i = filas.length - 1; i >= 0; i--) {
+        const fila      = filas[i];
+        const obj       = fila.toObject();
+        const messageId = parseInt(obj[COLUMNAS.ID_MENSAJE], 10);
+        const chatId    = parseInt(obj[COLUMNAS.ID_CHAT], 10);
 
-      if (isNaN(messageId) || isNaN(chatId)) continue;
+        if (isNaN(messageId) || isNaN(chatId)) continue;
 
-      analizados++;
-      if (analizados > limiteFilas) {
-        console.log(`[INFO] Se alcanzó el límite de seguridad de ${limiteFilas} filas analizadas. Finalizando escaneo.`);
-        break;
-      }
+        analizados++;
+        if (analizados > limiteFilas) {
+          console.log(`[INFO] Se alcanzó el límite de seguridad de ${limiteFilas} filas analizadas. Finalizando escaneo.`);
+          break;
+        }
 
-      // Comprobar si la fila lleva más de 5 minutos en estado de revisión
-      const estado = obj[COLUMNAS.ESTADO] || "";
-      let debeBorrarse = false;
+        // Comprobar si la fila lleva más de 5 minutos en estado de revisión
+        const estado = obj[COLUMNAS.ESTADO] || "";
+        let debeBorrarse = false;
 
-      if (estado.startsWith("Revisión desde:")) {
-        const timestampRevision = new Date(estado.replace("Revisión desde:", "").trim()).getTime();
-        if (!isNaN(timestampRevision)) {
-          const transcurridoMins = (Date.now() - timestampRevision) / 1000 / 60;
-          if (transcurridoMins >= 5) {
-            console.log(`[INFO] Fila en REVISIÓN superó el tiempo de gracia de 5 min (${Math.round(transcurridoMins)} min). Reseteando...`);
-            debeBorrarse = true;
+        if (estado.startsWith("Revisión desde:")) {
+          const timestampRevision = new Date(estado.replace("Revisión desde:", "").trim()).getTime();
+          if (!isNaN(timestampRevision)) {
+            const transcurridoMins = (Date.now() - timestampRevision) / 1000 / 60;
+            if (transcurridoMins >= 5) {
+              console.log(`[INFO] Fila en REVISIÓN superó el tiempo de gracia de 5 min (${Math.round(transcurridoMins)} min). Reseteando...`);
+              debeBorrarse = true;
+            }
           }
         }
-      }
 
-      const existe = debeBorrarse ? false : await mensajeExiste(api, chatId, messageId);
+        const existe = debeBorrarse ? false : await mensajeExiste(api, chatId, messageId);
 
-      if (!existe) {
-        if (!debeBorrarse) {
-          console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Reseteando fila...`);
+        if (!existe) {
+          if (!debeBorrarse) {
+            console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Reseteando fila...`);
+          }
+          await resetearFila(fila);
+          eliminados++;
         }
-        await resetearFila(fila);
-        eliminados++;
+
+        // Respetar los límites de velocidad de la API de Telegram
+        await new Promise((r) => setTimeout(r, config.app.cleanupRequestDelayMs));
       }
 
-      // Respetar los límites de velocidad de la API de Telegram
-      await new Promise((r) => setTimeout(r, config.app.cleanupRequestDelayMs));
+      console.log(
+        eliminados > 0
+          ? `[INFO] Limpieza finalizada: ${eliminados} fila(s) reseteada(s).`
+          : "[INFO] Limpieza finalizada: no se detectaron mensajes borrados."
+      );
+    } catch (error) {
+      console.error("[ERROR] Falló la ejecución de la limpieza:", error);
     }
-
-    console.log(
-      eliminados > 0
-        ? `[INFO] Limpieza finalizada: ${eliminados} fila(s) reseteada(s).`
-        : "[INFO] Limpieza finalizada: no se detectaron mensajes borrados."
-    );
-  } catch (error) {
-    console.error("[ERROR] Falló la ejecución de la limpieza:", error);
-  }
+  });
 }
 
 /**
@@ -145,14 +148,16 @@ export function programarLimpieza(api) {
 
   // 4. Reseteo diario a la medianoche + ordenamiento y saneamiento de la hoja
   new Cron("0 0 * * *", { timezone: "America/Caracas" }, async () => {
-    console.log("[INFO] Iniciando reseteo diario de medianoche...");
-    try {
-      const doc = await obtenerHojaDeCalculo();
-      await resetearFilasDeDiasAnteriores(doc);
-      await ordenarYLimpiarHojaPrincipal(doc);
-    } catch (err) {
-      console.error("[ERROR] Fallo en el reseteo diario de medianoche:", err);
-    }
+    await sheetsMutex.runExclusive(async () => {
+      console.log("[INFO] Iniciando reseteo diario de medianoche...");
+      try {
+        const doc = await obtenerHojaDeCalculo();
+        await resetearFilasDeDiasAnteriores(doc);
+        await ordenarYLimpiarHojaPrincipal(doc);
+      } catch (err) {
+        console.error("[ERROR] Fallo en el reseteo diario de medianoche:", err);
+      }
+    });
   });
 
   // 5. Reportes consolidados por cortes
@@ -171,13 +176,15 @@ export function programarLimpieza(api) {
 
   // 8. Resguardo histórico diario a las 11:00 PM
   const jobHistorico = new Cron("0 23 * * *", { timezone: "America/Caracas" }, async () => {
-    console.log("[INFO] Iniciando resguardo de historial diario a las 11:00 PM VET...");
-    try {
-      const doc = await obtenerHojaDeCalculo();
-      await guardarHistoricoDiario(doc);
-    } catch (err) {
-      console.error("[ERROR] Fallo al guardar el historial diario:", err);
-    }
+    await sheetsMutex.runExclusive(async () => {
+      console.log("[INFO] Iniciando resguardo de historial diario a las 11:00 PM VET...");
+      try {
+        const doc = await obtenerHojaDeCalculo();
+        await guardarHistoricoDiario(doc);
+      } catch (err) {
+        console.error("[ERROR] Fallo al guardar el historial diario:", err);
+      }
+    });
   });
 
   // ── Logs informativos sobre los próximos disparos ────────────────────────

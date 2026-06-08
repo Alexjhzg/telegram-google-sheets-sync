@@ -3,6 +3,10 @@
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import { config } from "../config/index.js";
+import { Mutex } from "../utils/mutex.js";
+
+// Lock global para secuenciar todas las operaciones asíncronas sobre Google Sheets
+export const sheetsMutex = new Mutex();
 
 // Nombres canónicos de las columnas en la hoja de cálculo
 export const COLUMNAS = {
