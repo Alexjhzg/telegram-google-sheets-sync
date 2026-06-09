@@ -95,4 +95,68 @@ export function registrarComandos(bot) {
       await ctx.reply("❌ Ocurrió un error al consultar el desglose de reportes en Google Sheets.");
     }
   });
+
+  // /estado — Diagnóstico del sistema y estado de conexión
+  bot.command("estado", async (ctx) => {
+    try {
+      const remitente = obtenerNombreRemitente(ctx);
+      console.log(`[INFO] Comando /estado ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+
+      // Verificar privilegios de administrador/propietario
+      const isAdmin = await esUsuarioAdmin(ctx);
+      if (!isAdmin) return;
+
+      // 1. Probar conexión a Google Sheets
+      let sheetsStatus = "✅ Conectado";
+      try {
+        await obtenerHojaDeCalculo();
+      } catch (err) {
+        sheetsStatus = `❌ Error: ${err.message}`;
+      }
+
+      // 2. Calcular Uptime humano
+      const uptimeSecs = process.uptime();
+      const d = Math.floor(uptimeSecs / (3600 * 24));
+      const h = Math.floor((uptimeSecs % (3600 * 24)) / 3600);
+      const m = Math.floor((uptimeSecs % 3600) / 60);
+      const s = Math.floor(uptimeSecs % 60);
+
+      const uptimeParts = [];
+      if (d > 0) uptimeParts.push(`${d}d`);
+      if (h > 0) uptimeParts.push(`${h}h`);
+      if (m > 0) uptimeParts.push(`${m}m`);
+      uptimeParts.push(`${s}s`);
+      const uptimeStr = uptimeParts.join(" ");
+
+      // 3. Uso de Memoria heap
+      const memory = `${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)} MB`;
+
+      // 4. Hora oficial Venezuela (VET)
+      const dateVE = new Date();
+      const formatter = new Intl.DateTimeFormat("es-VE", {
+        timeZone: config.app.timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+        hour12: true,
+      });
+      const horaVET = formatter.format(dateVE);
+
+      const mensaje =
+        `*Estado del Sistema*\n\n` +
+        `• *Google Sheets:* ${sheetsStatus}\n` +
+        `• *Uptime:* \`${uptimeStr}\`\n` +
+        `• *Memoria:* \`${memory}\`\n` +
+        `• *Hora Oficial VET:* \`${horaVET}\`\n` +
+        `• *Estatus:* \`Activo\``;
+
+      await ctx.reply(mensaje, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error("[ERROR] Falló al ejecutar el comando /estado:", error);
+      await ctx.reply("❌ Ocurrió un error al diagnosticar el sistema.");
+    }
+  });
 }
