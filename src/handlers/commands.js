@@ -58,8 +58,8 @@ export function registrarComandos(bot) {
 
       let respuesta = `*Desglose de reportes de hoy (${hoyStr}):*\n\n`;
       respuesta += "```\n";
-      respuesta += "Municipio        | Nodo  | 9am | 2pm | 6pm | Total\n";
-      respuesta += "-----------------+-------+-----+-----+-----+------\n";
+      respuesta += "Mun         |Nodo |9a|2p|6p|Tot\n";
+      respuesta += "------------+-----+--+--+--+---\n";
 
       for (const fila of reportesHoy) {
         const mun   = (fila.get(COLUMNAS.MUNICIPIO) || "").trim();
@@ -69,14 +69,15 @@ export function registrarComandos(bot) {
         const b3    = (fila.get(COLUMNAS.BLOQUE_3)            || "0").trim();
         const total = (fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0").trim();
 
-        const munPad   = mun.padEnd(16, " ");
+        // Limitar municipio a 12 caracteres y rellenar
+        const munPad   = mun.substring(0, 12).padEnd(12, " ");
         const nodPad   = nod.padEnd(5, " ");
-        const b1Pad    = b1.padStart(3, " ");
-        const b2Pad    = b2.padStart(3, " ");
-        const b3Pad    = b3.padStart(3, " ");
-        const totalPad = total.padStart(5, " ");
+        const b1Pad    = b1.padStart(2, " ");
+        const b2Pad    = b2.padStart(2, " ");
+        const b3Pad    = b3.padStart(2, " ");
+        const totalPad = total.padStart(3, " ");
 
-        respuesta += `${munPad} | ${nodPad} | ${b1Pad} | ${b2Pad} | ${b3Pad} | ${totalPad}\n`;
+        respuesta += `${munPad}|${nodPad}|${b1Pad}|${b2Pad}|${b3Pad}|${totalPad}\n`;
       }
       respuesta += "```";
 
