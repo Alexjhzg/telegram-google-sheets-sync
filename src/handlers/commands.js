@@ -9,6 +9,7 @@ import { config } from "../config/index.js";
 import { obtenerNombreRemitente, esUsuarioAdmin } from "../utils/telegram.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "../services/sheets.js";
 import { generarReporteRealTime } from "../services/reporting.js";
+import { obtenerBloqueYHoraActivo } from "../utils/parser.js";
 
 /**
  * Registra todos los comandos administrativos del bot.
@@ -145,13 +146,20 @@ export function registrarComandos(bot) {
       });
       const horaVET = formatter.format(dateVE);
 
+      // 5. Estado de la jornada laboral (Abierto: 6:00 AM - 6:00 PM VET, es decir, 360 - 1080 min)
+      const nowVE = Math.floor(Date.now() / 1000);
+      const { minutosDelDia } = obtenerBloqueYHoraActivo(nowVE);
+      const horarioLaboral = (minutosDelDia >= 360 && minutosDelDia <= 1080)
+        ? "🟢 Abierto (Recibiendo reportes)"
+        : "🔴 Cerrado (Bloqueo activo)";
+
       const mensaje =
         `*Estado del Sistema*\n\n` +
         `• *Google Sheets:* ${sheetsStatus}\n` +
+        `• *Horario Laboral:* ${horarioLaboral}\n` +
         `• *Uptime:* \`${uptimeStr}\`\n` +
         `• *Memoria:* \`${memory}\`\n` +
-        `• *Hora Oficial VET:* \`${horaVET}\`\n` +
-        `• *Estatus:* \`Activo\``;
+        `• *Hora Oficial VET:* \`${horaVET}\``;
 
       await ctx.reply(mensaje, { parse_mode: "Markdown" });
     } catch (error) {
