@@ -6,7 +6,7 @@
  */
 
 import { config } from "../config/index.js";
-import { obtenerNombreRemitente } from "../utils/telegram.js";
+import { obtenerNombreRemitente, esUsuarioAdmin } from "../utils/telegram.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "../services/sheets.js";
 import { generarReporteRealTime } from "../services/reporting.js";
 
@@ -20,6 +20,15 @@ export function registrarComandos(bot) {
     try {
       const remitente = obtenerNombreRemitente(ctx);
       console.log(`[INFO] Comando /reporte (tiempo real) ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+
+      // Verificar privilegios de administrador/propietario
+      const isAdmin = await esUsuarioAdmin(ctx);
+      if (!isAdmin) {
+        await ctx.reply("⚠️ Este comando solo está disponible para administradores y propietarios del grupo.", {
+          reply_parameters: { message_id: ctx.message?.message_id }
+        });
+        return;
+      }
 
       const doc = await obtenerHojaDeCalculo();
       const mensaje = await generarReporteRealTime(doc);
@@ -36,6 +45,15 @@ export function registrarComandos(bot) {
     try {
       const remitente = obtenerNombreRemitente(ctx);
       console.log(`[INFO] Comando /lista (desglose) ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+
+      // Verificar privilegios de administrador/propietario
+      const isAdmin = await esUsuarioAdmin(ctx);
+      if (!isAdmin) {
+        await ctx.reply("⚠️ Este comando solo está disponible para administradores y propietarios del grupo.", {
+          reply_parameters: { message_id: ctx.message?.message_id }
+        });
+        return;
+      }
 
       const doc  = await obtenerHojaDeCalculo();
       const hoja = doc.sheetsByTitle["registros_telegram"];

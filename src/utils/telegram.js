@@ -46,3 +46,29 @@ export async function reaccionar(ctx, emoji) {
     console.warn(`[ADVERTENCIA] No se pudo reaccionar con '${emoji}' al mensaje ID ${messageId}: ${error.message}`);
   }
 }
+
+/**
+ * Verifica si el usuario actual es administrador o el creador del chat.
+ *
+ * @param {import("grammy").Context} ctx
+ * @returns {Promise<boolean>}
+ */
+export async function esUsuarioAdmin(ctx) {
+  // En chats privados, restringimos por defecto a menos que se defina otra lógica
+  if (ctx.chat?.type === "private") {
+    return false;
+  }
+
+  // Si el usuario es el canal anónimo o "GroupAnonymousBot", es admin de forma implícita
+  if (ctx.from?.id === 1087968824) {
+    return true;
+  }
+
+  try {
+    const chatMember = await ctx.getChatMember(ctx.from.id);
+    return chatMember.status === "administrator" || chatMember.status === "creator";
+  } catch (error) {
+    console.error(`[ERROR] No se pudo verificar rango del usuario ${ctx.from?.id}:`, error.message);
+    return false;
+  }
+}
