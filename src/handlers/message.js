@@ -1,7 +1,7 @@
 "use strict";
 
 import { config } from "../config/index.js";
-import { parsearReporte, convertirTimestamp } from "../utils/parser.js";
+import { parsearReporte, convertirTimestamp, obtenerBloqueYHoraActivo } from "../utils/parser.js";
 import { obtenerNombreRemitente, reaccionar } from "../utils/telegram.js";
 import { registrarComandos } from "./commands.js";
 import {
@@ -67,6 +67,25 @@ export function registrarHandlers(bot) {
       `\n${texto}` +
       `\n=============================\n`
     );
+
+    // ── 0. Verificar si está dentro del horario de la jornada laboral (6:00 AM a 6:00 PM VET) ──
+    const creationTimestamp = mensajeObj.date || Math.floor(Date.now() / 1000);
+    const editTimestamp = mensajeObj.edit_date || null;
+    let timestampEfectivo = creationTimestamp;
+
+    if (esEdicion && editTimestamp) {
+      const diffMins = (editTimestamp - creationTimestamp) / 60;
+      const holgura = config.app.reportEditGracePeriodMins;
+      if (diffMins > holgura) {
+        timestampEfectivo = editTimestamp;
+      }
+    }
+
+    const { minutosDelDia, horaStr } = obtenerBloqueYHoraActivo(timestampEfectivo);
+    if (minutosDelDia < 360 || minutosDelDia > 1080) {
+      console.log(`[INFO] Acción recibida fuera de jornada laboral (${horaStr} VET). Ignorando silenciosamente.`);
+      return;
+    }
 
     // ── 1. Verificar si es una solicitud de eliminación manual ──
     if (REGEX_ELIMINAR.test(texto)) {
