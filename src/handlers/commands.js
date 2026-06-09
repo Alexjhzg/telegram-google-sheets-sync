@@ -15,19 +15,19 @@ import { generarReporteRealTime } from "../services/reporting.js";
  * @param {import("grammy").Bot} bot
  */
 export function registrarComandos(bot) {
-  // /reportes — Consulta el reporte consolidado del estado Monagas en tiempo real
-  bot.command("reportes", async (ctx) => {
+  // /reporte — Consulta el reporte consolidado del estado Monagas en tiempo real
+  bot.command("reporte", async (ctx) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando /reportes (tiempo real) ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+      console.log(`[INFO] Comando /reporte (tiempo real) ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
 
       const doc = await obtenerHojaDeCalculo();
       const mensaje = await generarReporteRealTime(doc);
 
       await ctx.reply(mensaje, { parse_mode: "Markdown" });
     } catch (error) {
-      console.error("[ERROR] Falló al ejecutar el comando /reportes:", error);
-      await ctx.reply("❌ Ocurrió un error al generar el reporte en tiempo real.");
+      console.error("[ERROR] Falló al ejecutar el comando /reporte:", error);
+      await ctx.reply("❌ Ocurrió un error al generar el reporte.");
     }
   });
 
