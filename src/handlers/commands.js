@@ -107,10 +107,21 @@ export function registrarComandos(bot) {
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) return;
 
-      // 1. Probar conexión a Google Sheets
+      // 1. Probar conexión a Google Sheets y cargar datos de hoy
       let sheetsStatus = "✅ Conectado";
+      let reporteCargaStr = "";
       try {
-        await obtenerHojaDeCalculo();
+        const doc = await obtenerHojaDeCalculo();
+        const hoja = doc.sheetsByTitle["registros_telegram"];
+        if (hoja) {
+          const filas = await hoja.getRows();
+          const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+          const hoyStr = new Date().toLocaleDateString("es-VE", opts);
+          const reportesHoy = filas.filter(
+            (fila) => (fila.get(COLUMNAS.FECHA) || "").trim() === hoyStr
+          );
+          reporteCargaStr = `• *Nodos reportados hoy:* ${reportesHoy.length} / ${filas.length}\n`;
+        }
       } catch (err) {
         sheetsStatus = `❌ Error: ${err.message}`;
       }
@@ -156,6 +167,7 @@ export function registrarComandos(bot) {
       const mensaje =
         `*Estado del Sistema*\n\n` +
         `• *Google Sheets:* ${sheetsStatus}\n` +
+        reporteCargaStr +
         `• *Horario Laboral:* ${horarioLaboral}\n` +
         `• *Uptime:* \`${uptimeStr}\`\n` +
         `• *Memoria:* \`${memory}\`\n` +
