@@ -202,13 +202,13 @@ export async function generarReporteRealTime(doc) {
   const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
 
   return (
-    `📊 *Reporte en Tiempo Real*\n` +
-    `📅 *${diaSemana}*\n\n` +
-    `📍 *Monagas*\n` +
+    `*Reporte en Tiempo Real*\n` +
+    `*${diaSemana}*\n\n` +
+    `*Monagas*\n` +
     `Reporte de Encuestadores SEGEN en campo:\n\n` +
     `• ${linea9am}\n` +
     `• ${linea2pm}\n` +
     `• ${linea6pm}\n\n` +
-    `🏆 *Acumulado campo:* ${vAcumulado}/${limite} = *${pctAcumulado}%*`
+    `*Acumulado campo:* ${vAcumulado}/${limite} = *${pctAcumulado}%*`
   );
 }

@@ -50,13 +50,13 @@ export function registrarComandos(bot) {
 
       if (reportesHoy.length === 0) {
         await ctx.reply(
-          `📊 *Reportes registrados para hoy (${hoyStr}):*\n\nNo hay reportes registrados aún.`,
+          `*Reportes registrados para hoy (${hoyStr}):*\n\nNo hay reportes registrados aún.`,
           { parse_mode: "Markdown" }
         );
         return;
       }
 
-      let respuesta = `📊 *Desglose de reportes de hoy (${hoyStr}):*\n\n`;
+      let respuesta = `*Desglose de reportes de hoy (${hoyStr}):*\n\n`;
       for (const fila of reportesHoy) {
         const mun   = fila.get(COLUMNAS.MUNICIPIO);
         const nod   = fila.get(COLUMNAS.NODO);
