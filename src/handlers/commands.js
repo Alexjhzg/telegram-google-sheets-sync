@@ -57,15 +57,28 @@ export function registrarComandos(bot) {
       }
 
       let respuesta = `*Desglose de reportes de hoy (${hoyStr}):*\n\n`;
+      respuesta += "```\n";
+      respuesta += "Municipio        | Nodo  | 9am | 2pm | 6pm | Total\n";
+      respuesta += "-----------------+-------+-----+-----+-----+------\n";
+
       for (const fila of reportesHoy) {
-        const mun   = fila.get(COLUMNAS.MUNICIPIO);
-        const nod   = fila.get(COLUMNAS.NODO);
-        const b1    = fila.get(COLUMNAS.BLOQUE_1)            || "0";
-        const b2    = fila.get(COLUMNAS.BLOQUE_2)            || "0";
-        const b3    = fila.get(COLUMNAS.BLOQUE_3)            || "0";
-        const total = fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0";
-        respuesta += `• *${mun}* (Nodo ${nod}): 9am: \`${b1}\` | 2pm: \`${b2}\` | 6pm: \`${b3}\` | Total: \`${total}\`\n`;
+        const mun   = (fila.get(COLUMNAS.MUNICIPIO) || "").trim();
+        const nod   = (fila.get(COLUMNAS.NODO) || "").trim();
+        const b1    = (fila.get(COLUMNAS.BLOQUE_1)            || "0").trim();
+        const b2    = (fila.get(COLUMNAS.BLOQUE_2)            || "0").trim();
+        const b3    = (fila.get(COLUMNAS.BLOQUE_3)            || "0").trim();
+        const total = (fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0").trim();
+
+        const munPad   = mun.padEnd(16, " ");
+        const nodPad   = nod.padEnd(5, " ");
+        const b1Pad    = b1.padStart(3, " ");
+        const b2Pad    = b2.padStart(3, " ");
+        const b3Pad    = b3.padStart(3, " ");
+        const totalPad = total.padStart(5, " ");
+
+        respuesta += `${munPad} | ${nodPad} | ${b1Pad} | ${b2Pad} | ${b3Pad} | ${totalPad}\n`;
       }
+      respuesta += "```";
 
       await ctx.reply(respuesta, { parse_mode: "Markdown" });
     } catch (error) {
