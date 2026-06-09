@@ -23,12 +23,7 @@ export function registrarComandos(bot) {
 
       // Verificar privilegios de administrador/propietario
       const isAdmin = await esUsuarioAdmin(ctx);
-      if (!isAdmin) {
-        await ctx.reply("⚠️ Este comando solo está disponible para administradores y propietarios del grupo.", {
-          reply_parameters: { message_id: ctx.message?.message_id }
-        });
-        return;
-      }
+      if (!isAdmin) return;
 
       const doc = await obtenerHojaDeCalculo();
       const mensaje = await generarReporteRealTime(doc);
@@ -48,12 +43,7 @@ export function registrarComandos(bot) {
 
       // Verificar privilegios de administrador/propietario
       const isAdmin = await esUsuarioAdmin(ctx);
-      if (!isAdmin) {
-        await ctx.reply("⚠️ Este comando solo está disponible para administradores y propietarios del grupo.", {
-          reply_parameters: { message_id: ctx.message?.message_id }
-        });
-        return;
-      }
+      if (!isAdmin) return;
 
       const doc  = await obtenerHojaDeCalculo();
       const hoja = doc.sheetsByTitle["registros_telegram"];
