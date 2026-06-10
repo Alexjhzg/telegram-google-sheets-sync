@@ -5,70 +5,118 @@
 [![Google Sheets API](https://img.shields.io/badge/Google%20Sheets-API-red.svg?style=for-the-badge&logo=google-sheets)](https://developers.google.com/sheets/api)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-blue.svg?style=for-the-badge&logo=docker)](https://www.docker.com/)
 
-Un bot de Telegram empresarial e inteligente diseñado para la **supervisión de personal y reporte de novedades en campo en tiempo real**. El sistema extrae datos de reportes enviados por chats/grupos de Telegram mediante expresiones regulares y los sincroniza al instante en una hoja de cálculo de Google Sheets. 
+Un bot de Telegram empresarial e inteligente diseñado para la **supervisión de personal y reporte de novedades en campo en tiempo real** (verificadores) en el estado Monagas. El sistema extrae datos de reportes mediante expresiones regulares y los sincroniza de forma segura en una hoja de cálculo unificada de Google Sheets estructurada con **filas fijas por nodo**.
 
-Además, cuenta con un **sistema de reconciliación en segundo plano** que monitoriza si los reportes originales han sido borrados de Telegram y, en ese caso, elimina de forma segura las filas correspondientes de Google Sheets para garantizar una consistencia absoluta de los datos.
+El bot incluye un **Background Worker** que realiza la reconciliación continua de los mensajes (eliminando o reseteando los datos de filas si el mensaje original fue borrado de Telegram) y un potente panel de comandos de diagnóstico reservado para administradores.
 
 ---
 
 ## 🚀 Características Principales
 
-* 📊 **Sincronización en Tiempo Real:** Recepción de mensajes en Telegram, extracción inteligente de datos (Municipios, Nodos, Totales) y registro inmediato en Google Sheets.
-* 🧹 **Limpieza Automática Resiliente:** Worker en segundo plano que detecta mensajes borrados en Telegram y elimina sus filas en la hoja de cálculo.
-* ⏱️ **Planificación Precisa con Croner:** Gestión del tiempo declarativa y robusta basada en la zona horaria nativa de Venezuela (`America/Caracas`), con limpiezas continuas (cada 5 min) y cortes de precisión (9:00 AM, 2:00 PM y 6:00 PM VET).
-* 🛡️ **Seguridad y Resiliencia:** 
-  * Ignorado silencioso de errores transitorios de la API de Telegram para evitar spam en los logs.
-  * Algoritmo de eliminación en orden inverso para mitigar desfases de índices de filas en Google Sheets.
-  * Respeto estricto del *rate limit* de Telegram a través de retrasos artificiales configurables.
-* 🐳 **Entorno Dockerizado:** Despliegue con un solo comando en contenedores seguros (`node:20-alpine`).
+* 📊 **Arquitectura de Filas Fijas:** A diferencia de las inserciones dinámicas de filas, el bot trabaja sobre una estructura de nodos pre-poblada desde un catálogo oficial. El sistema actualiza campos de celdas específicas en lugar de crear nuevas filas.
+* 🧹 **Saneamiento Automático:** Worker en segundo plano (cada 5 minutos) que verifica si los mensajes de reportes registrados han sido borrados de Telegram. Si se elimina el mensaje, la fila del nodo correspondiente restablece sus valores a cero.
+* ⚙️ **Comandos Administrativos de Monitoreo:**
+  * `/reporte` — Genera un consolidado de asistencia del estado en tiempo real.
+  * `/lista` — Devuelve un desglose tabular nodo por nodo (B1, B2, B3 y total) para el día en curso.
+  * `/estado` — Diagnóstico de salud del sistema (conexión con la API de Sheets, uptime, memoria, hora oficial VET, estado de ventana de la jornada laboral).
+* ⏱️ **Lógica de Turnos y Bloques Rígidos:** Jornada organizada en 3 cortes horarios basados en la zona horaria nativa de Venezuela (`America/Caracas`):
+  * **Bloque 1 (B1):** 9:00 AM
+  * **Bloque 2 (B2):** 2:00 PM
+  * **Bloque 3 (B3):** 6:00 PM
+* 🛡️ **Seguridad y Control de Edición:**
+  * Restricción estricta de comandos administrativos solo a administradores o creadores del grupo de Telegram.
+  * Ventana de gracia de 10 minutos para re-procesar ediciones usando la fecha original de envío.
+  * Gestión de estados de error mediante reacciones (`👍` / `👎`) y respuestas con alertas contextuales detalladas (error de municipio, nodo inválido, o exceso de capacidad).
+  * Marcado temporal de filas inválidas en Google Sheets (`Estado: Revisión desde [Timestamp]`) antes de su purga definitiva tras 5 minutos sin corrección.
 
 ---
 
 ## 🛠️ Arquitectura de la Solución
 
+### Flujo de Reportes en Tiempo Real
+
 ```mermaid
 graph TD
-    A[Mensaje en Grupo Telegram] -->|1. Evento de Mensaje| B(Bot Telegram - Grammy)
-    B -->|2. Parser regex| C{¿Es Formato de Reporte?}
-    C -->|Sí| D[Registrar Fila en Google Sheets]
-    C -->|No| E[Ignorar Mensaje]
-    
-    F[Croner Scheduler] -->|Cada 5 min / Horas de Corte| G(Job de Limpieza)
-    G -->|3. Leer Filas| H[Google Sheets]
-    H -->|4. Validar existencia de Message ID| B
-    B -->|5. ¿Existe mensaje en API?| I{¿Mensaje borrado?}
-    I -->|Sí| J[Borrar Fila de Sheets en orden inverso]
-    I -->|No| K[Mantener Fila]
+    A[Mensaje o Edición en Telegram] -->|1. Validación Horaria| B{¿Entre 6:00 AM y 6:00 PM VET?}
+    B -->|No| C[Ignorar silenciosamente]
+    B -->|Sí| D{¿Contiene 'Formato de reporte'?}
+    D -->|No| E[Ignorar / Poner en revisión si es edición]
+    D -->|Sí| F[Parseo Regex: Municipio, Nodo y Bloques]
+    F -->|Fallo Parsing| G[Reaccionar 👎 + Alerta de Formato]
+    F -->|Éxito| H[Validar Municipio y Nodo vs Catálogo]
+    H -->|No existe en catálogo| I[Reaccionar 👎 + Alerta de Catálogo]
+    H -->|Existe| J[Validar Límite de Capacidad Máxima]
+    J -->|Excede límite permitido| K[Reaccionar 👎 + Alerta de Capacidad]
+    J -->|Aprobado| L[Calcular Bloques Horarios Pasado/Presente]
+    L --> M[Actualizar Fila Fija del Nodo en registros_telegram]
+    M --> N[Reaccionar 👍 en Telegram]
+```
+
+### Flujo de Reconciliación del Worker (Segundo Plano)
+
+```mermaid
+graph TD
+    A[Croner Scheduler: Cada 5 min] -->|1. Consultar últimas 60 filas| B[Google Sheets]
+    B -->|2. Obtener IDs de Mensaje| C{¿Mensaje existe en Telegram?}
+    C -->|Sí| D{¿Está en estado de revisión > 5 min?}
+    D -->|No| E[Mantener fila intacta]
+    D -->|Sí| F[Resetear fila a cero]
+    C -->|No (Mensaje Borrado)| F
+    F -->|3. Actualizar base de datos| B
 ```
 
 ---
 
-## 💡 Retos de Ingeniería y Soluciones Implementadas
+## 💡 Reglas de Negocio Clave
 
-### 1. El Desafío de la Mutación en Lotes (Evitando el Desfase de Índices)
-* **Problema:** Al consultar la API de Google Sheets y recorrer las filas secuencialmente para eliminar registros obsoletos (mensajes borrados), cada borrado altera la posición física de las filas subsiguientes (Index Shifting). Esto corrompe las referencias del bucle, omitiendo filas o intentando borrar datos incorrectos.
-* **Solución:** Implementación de un **algoritmo de recorrido y eliminación en orden inverso** (`filas.length - 1` hasta `0`). Al eliminar de abajo hacia arriba, las filas modificadas hacia adelante no afectan la numeración de los índices que aún faltan por analizar, garantizando transacciones seguras.
+### 1. La Regla del Pasado Bloqueado (`LOCKED`)
+* Los bloques de horas ya cerrados (cuya hora de corte ya pasó) son **estrictamente de solo lectura**. 
+* Si un usuario reporta tarde o edita un reporte antiguo, el bot no modificará la celda del bloque pasado en Sheets. 
+* *Diferencial positivo:* Si el reporte editado o tardío presenta una cifra mayor para un bloque pasado, la diferencia se acumula y se registra en el **bloque presente** para evitar la pérdida de personal reportado sin alterar el histórico consolidado del turno anterior.
 
-### 2. Resiliencia de API y Mitigación de Rate Limiting
-* **Problema:** La validación masiva en lotes de mensajes de Telegram puede provocar bloqueos temporales por parte del servidor por abuso de cuota (HTTP 429 - Too Many Requests).
-* **Solución:** Desarrollo de una cola de procesamiento asíncrona no bloqueante que introduce un delay dinámico configurable (`cleanupRequestDelayMs: 100`) entre consultas de API, regulando el tráfico y respetando el *rate limit* de Telegram.
+### 2. Edición y Período de Holgura
+* **10 Minutos de Gracia para Edición:** Si el mensaje original se edita dentro de los primeros 10 minutos de su creación, el bot procesa la actualización utilizando la **hora original** del reporte. Si se edita después, se procesa bajo la **hora de la edición** (pudiendo clasificar el mensaje bajo un nuevo bloque horario activo).
+* **Modo Revisión:** Si una edición hace que el reporte sea inválido (por ejemplo, excede la capacidad autorizada del nodo), el bot no borra la fila en Sheets de inmediato. Escribe `Revisión desde: [Timestamp]` en la columna de `Estado`. El usuario tiene **5 minutos** para corregirlo antes de que el Background Worker resetee los valores del nodo a cero.
 
-### 3. Manejo de Errores e Integridad del Estado
-* **Problema:** Errores transitorios de red o llamadas de API no destructivas sin estado (como verificar reacciones ausentes) llenaban los logs del servidor de ruido e inducían falsas detecciones de borrado.
-* **Solución:** Implementación de un discriminador de excepciones. El bot reconoce el código `MESSAGE_ID_INVALID` como señal ineludible de eliminación permanente, mientras que maneja silenciosamente códigos inocuos como `REACTION_EMPTY`, aislando fallos de conexión para evitar la pérdida accidental de datos.
+### 3. Automatización Diaria
+* **Resguardo Histórico (11:00 PM VET):** El bot toma una captura de todos los reportes del día actual y los copia en bloque a la pestaña `registros_historicos_telegram`.
+* **Reset de Medianoche (12:00 AM VET):** Para iniciar la nueva jornada, el bot restablece a `0` todas las celdas de reportes (`B1`, `B2`, `B3`, `Total`) de la hoja principal, actualiza la fecha al nuevo día y aplica un ordenamiento de filas (Municipio A-Z, Nodo Menor-Mayor).
 
 ---
 
-## ⚙️ Configuración del Entorno (`.env`)
+## ⚙️ Estructura de Google Sheets
+
+Para el correcto funcionamiento del bot, la hoja de cálculo de Google debe contener tres pestañas específicas:
+
+### 1. `registros_telegram` (Hoja Principal)
+Es la hoja donde se reflejan las filas fijas por cada nodo. El bot inicializa esta hoja automáticamente al arrancar.
+
+Columnas obligatorias en la fila 1:
+* `Municipio` | `Nodo` | `Total Verificadores` | `Bloque 1 (9am)` | `Bloque 2 (2pm)` | `Bloque 3 (6pm)` | `Fecha` | `Hora` | `Remitente` | `ID Mensaje` | `ID Chat` | `Estado`
+
+### 2. `verificadores_nodo` (Catálogo Oficial)
+Debe ser pre-cargada manualmente por el administrador con los nodos oficiales permitidos.
+
+Columnas obligatorias:
+* `MUNICIPIO` | `NODO` | `CANTIDAD DE VERIFICADORES` (Límite máximo permitido por día para ese nodo).
+
+### 3. `registros_historicos_telegram` (Historial)
+El bot la creará e inicializará automáticamente si no existe para guardar las capturas diarias a las 11:00 PM.
+
+---
+
+## ⚙️ Variables de Entorno (`.env`)
 
 Crea un archivo `.env` en la raíz del proyecto basándote en `.env.example`:
 
 | Variable | Descripción | Ejemplo |
 | :--- | :--- | :--- |
-| `TELEGRAM_BOT_TOKEN` | Token de acceso de tu bot otorgado por @BotFather. | `123456789:ABCdefGhI...` |
-| `GOOGLE_SPREADSHEET_ID`| ID de la hoja de cálculo de Google (extraído de la URL de Sheets). | `1a2b3c4d5e6f7g8h9i0j...` |
+| `TELEGRAM_BOT_TOKEN` | Token de acceso del bot otorgado por @BotFather. | `123456789:ABCdefGhI...` |
+| `GOOGLE_SPREADSHEET_ID`| ID de la hoja de cálculo de Google (extraído de su URL). | `1a2b3c4d5e6f7g8h9i0j...` |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Correo electrónico de la cuenta de servicio de Google Cloud. | `sheets-bot@project.iam.gserviceaccount.com` |
 | `GOOGLE_PRIVATE_KEY` | Llave privada completa de la cuenta de servicio (con saltos de línea `\n`). | `-----BEGIN PRIVATE KEY-----\nMIIEvgIBADAN...` |
+| `PORT` | *(Opcional)* Puerto para el servicio de health-check HTTP. Por defecto es `8080`. | `8080` |
+| `REPORT_EDIT_GRACE_PERIOD_MINS` | *(Opcional)* Minutos de tolerancia para editar un reporte. Por defecto es `10`. | `10` |
 
 ---
 
@@ -76,60 +124,61 @@ Crea un archivo `.env` en la raíz del proyecto basándote en `.env.example`:
 
 ### Requisitos Previos
 * Docker y Docker Compose instalados en el sistema.
-* Una cuenta de servicio de Google Cloud con permisos de edición compartidos en tu hoja de cálculo.
+* Cuenta de servicio en Google Cloud con permisos de **Editor** en la hoja de cálculo.
 
-### Paso 1: Configurar la Hoja de Google Sheets
-1. Crea una hoja de cálculo nueva en Google Sheets.
-2. Nombra la primera hoja/pestaña exactamente como: **`Reportes`**.
-3. Añade las siguientes cabeceras exactas en la fila 1:
-   `ID` | `Municipio` | `Nodo` | `Total` | `Chat ID` | `Message ID` | `Fecha`
-4. Comparte la hoja de cálculo otorgándole permisos de **Editor** al correo de tu cuenta de servicio (`GOOGLE_SERVICE_ACCOUNT_EMAIL`).
-
-### Paso 2: Despliegue con Docker (Recomendado)
-El proyecto cuenta con dockerización completa y reinicios automáticos ante fallos.
+### Paso 1: Levantar con Docker (Recomendado)
+El proyecto incluye un entorno Dockerizado optimizado con reinicios automáticos ante caídas.
 
 ```bash
 # Construir e iniciar el contenedor en segundo plano
 docker compose up -d --build
 
-# Ver los logs del bot en tiempo real
+# Monitorear los logs en tiempo real
 docker compose logs -f
 ```
 
-### Paso 3: Ejecución en Modo Desarrollo (Local)
-Si deseas ejecutar la aplicación directamente en Node.js local:
+### Paso 2: Ejecución Local en Modo Desarrollo
+Si deseas correr la aplicación sin contenedores directamente con Node.js:
 
 ```bash
-# 1. Instalar dependencias
+# 1. Instalar dependencias del proyecto
 npm install
 
-# 2. Iniciar el bot en desarrollo
+# 2. Iniciar la aplicación
 npm start
 ```
 
 ---
 
-## 🗂️ Estructura del Código y Patrones de Diseño
+## 🗂️ Estructura del Proyecto
 
-El código sigue el principio de **Separación de Responsabilidades (Separation of Concerns)**:
+El código está estructurado bajo el principio de **Separación de Responsabilidades**:
 
 ```bash
-├── bot.js                  # Punto de entrada y Bootstrap de la aplicación
-├── Dockerfile              # Configuración de Docker de producción para node:20-alpine
-├── docker-compose.yml      # Orquestación de servicios en Docker
+├── bot.js                  # Punto de entrada de la aplicación y servidor de healthcheck
+├── Dockerfile              # Configuración de Docker de producción (node:20-alpine)
+├── docker-compose.yml      # Definición de la orquestación del contenedor
 ├── package.json            # Dependencias del proyecto
-├── src/
-│   ├── config/
-│   │   └── index.js        # Configuración centralizada y tipado/normalización de variables de entorno
-│   ├── handlers/
-│   │   └── message.js      # Capa controladora: Middleware recepctor y enrutador de mensajes
-│   ├── jobs/
-│   │   └── cleanup.js      # Capa del worker: Proceso de reconciliación asíncrono con Croner
-│   ├── services/
-│   │   └── sheets.js       # Capa de infraestructura: Conexión y operaciones de Google Sheets API
-│   └── utils/
-│       └── parser.js       # Capa de utilidades: Funciones puras con regex para parseo de texto
-└── .gitignore              # Seguridad del repositorio frente a fugas de configuración
+├── README.md               # Documentación general
+├── analisis_logica_negocio.md # Especificación formal de reglas de negocio
+└── src/
+    ├── config/
+    │   └── index.js        # Carga, tipado y validación de variables de entorno
+    ├── handlers/
+    │   ├── commands.js     # Manejo de comandos (/reporte, /lista, /estado)
+    │   └── message.js      # Middleware receptor de mensajes y ediciones
+    ├── jobs/
+    │   └── cleanup.js      # Programador de cron jobs y worker de reconciliación
+    ├── services/
+    │   ├── notifications.js# Envío de alertas de error y avisos de cierre a Telegram
+    │   ├── reporting.js    # Generación de reportes de texto y consolidados
+    │   ├── reportProcessor.js# Core de la lógica de negocio (acumulación y cortes horarios)
+    │   ├── sheets.business.js# Lógica de Sheets (inicialización de nodos y reordenamiento)
+    │   └── sheets.js       # Capa de datos e integración básica de Google Sheets API
+    └── utils/
+        ├── mutex.js        # Mutex para operaciones seguras concurrentes en Sheets
+        ├── parser.js       # Extracción Regex y parseo de fechas/bloques
+        └── telegram.js     # Utilidades de mensajes, remitentes y reacciones
 ```
 
 ---

@@ -4,14 +4,18 @@
 // Carga la configuración primero (valida y falla rápido si falta algo)
 import { config } from "./src/config/index.js";
 
-import http                           from "node:http";
-import { Bot }                      from "grammy";
-import { registrarHandlers }        from "./src/handlers/message.js";
-import { programarLimpieza }        from "./src/jobs/cleanup.js";
-import { obtenerHojaDeCalculo,
-         resetearFilasDeDiasAnteriores }  from "./src/services/sheets.js";
-import { inicializarHojaConNodos,
-         ordenarYLimpiarHojaPrincipal }   from "./src/services/sheets.business.js";
+import http from "node:http";
+import { Bot } from "grammy";
+import { registrarHandlers } from "./src/handlers/message.js";
+import { programarLimpieza } from "./src/jobs/cleanup.js";
+import {
+  obtenerHojaDeCalculo,
+  resetearFilasDeDiasAnteriores
+} from "./src/services/sheets.js";
+import {
+  inicializarHojaConNodos,
+  ordenarYLimpiarHojaPrincipal
+} from "./src/services/sheets.business.js";
 
 // ── Instanciar el bot ───────────────────────────────────────────
 const bot = new Bot(config.telegram.token);
@@ -30,8 +34,8 @@ const PORT = process.env.PORT || 8080;
 const server = http.createServer((req, res) => {
   if (req.url === "/" || req.url === "/healthz") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ 
-      status: "ok", 
+    res.end(JSON.stringify({
+      status: "ok",
       uptime: Math.round(process.uptime()),
       message: "Bot de supervisión en campo activo y escuchando."
     }));
