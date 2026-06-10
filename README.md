@@ -61,7 +61,7 @@ graph TD
     C -->|Sí| D{¿Está en estado de revisión > 5 min?}
     D -->|No| E[Mantener fila intacta]
     D -->|Sí| F[Resetear fila a cero]
-    C -->|No "(Mensaje Borrado)"| F
+    C -->|"No (Mensaje borrado)"| F
     F -->|3. Actualizar base de datos| B
 ```
 
