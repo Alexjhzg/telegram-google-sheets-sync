@@ -56,10 +56,10 @@ export async function enviarReporteDiario(api, corte = 3) {
     const pct2pm   = ((v2pm / limite) * 100).toFixed(2).replace(".", ",");
     const pct6pm   = ((v6pm / limite) * 100).toFixed(2).replace(".", ",");
 
-    // Formatear las líneas de los cortes de forma dinámica
-    const linea9am = `9:00 am ${v9am}/${limite} = ${pct9am}%`;
-    const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm /${limite}`;
-    const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm /${limite}`;
+    // Formatear las líneas de los cortes de forma dinámica (solo muestran datos si el bloque ya cerró/llenó)
+    const linea9am = corte >= 1 ? `9:00 am ${v9am}/${limite} = ${pct9am}%` : `9:00 am`;
+    const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm`;
+    const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm`;
 
     // Calcular acumulado de campo dinámicamente según el corte para no mostrar el acumulado global de la jornada completa
     let vAcumulado = 0;
@@ -72,14 +72,16 @@ export async function enviarReporteDiario(api, corte = 3) {
     }
     const pctAcumulado = ((vAcumulado / limite) * 100).toFixed(2).replace(".", ",");
 
-    // Obtener el día de la semana actual en español (Zona Horaria Venezuela)
+    // Obtener la fecha y el día de la semana actual en español (Zona Horaria Venezuela)
     const opcionesDia = { timeZone: "America/Caracas", weekday: "long" };
+    const opcionesFecha = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
+    const fechaStr = new Intl.DateTimeFormat("es-VE", opcionesFecha).format(new Date());
     const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
     // Capitalizar el día (ej: "Lunes")
     const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
 
     const mensaje =
-      `${diaSemana}\n\n` +
+      `${diaSemana} ${fechaStr}\n\n` +
       `Monagas\n` +
       `Reporte de Encuestadores SEGEN en campo:\n` +
       `${linea9am}\n` +
@@ -172,37 +174,43 @@ export async function generarReporteRealTime(doc) {
   const minuteVE = parseInt(parts.find((p) => p.type === "minute").value, 10);
   const minutosDelDia = hourVE * 60 + minuteVE;
 
-  let corte = 3;
-  if (minutosDelDia <= 540) {
-    corte = 1; // Antes de las 9:00 am
-  } else if (minutosDelDia <= 840) {
-    corte = 2; // 9:01 am a 2:00 pm
+  let corte = 0;
+  if (minutosDelDia > 1080) {
+    corte = 3; // Después de las 6:00 pm
+  } else if (minutosDelDia > 840) {
+    corte = 2; // 2:01 pm a 6:00 pm
+  } else if (minutosDelDia > 540) {
+    corte = 1; // 9:01 am a 2:00 pm
+  } else {
+    corte = 0; // Antes de las 9:00 am
   }
 
   const pct9am   = ((v9am / limite) * 100).toFixed(2).replace(".", ",");
   const pct2pm   = ((v2pm / limite) * 100).toFixed(2).replace(".", ",");
   const pct6pm   = ((v6pm / limite) * 100).toFixed(2).replace(".", ",");
 
-  const linea9am = `9:00 am ${v9am}/${limite} = ${pct9am}%`;
-  const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm /${limite}`;
-  const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm /${limite}`;
+  const linea9am = corte >= 1 ? `9:00 am ${v9am}/${limite} = ${pct9am}%` : `9:00 am`;
+  const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm`;
+  const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm`;
 
   let vAcumulado = 0;
   if (corte === 1) {
     vAcumulado = v9am;
   } else if (corte === 2) {
     vAcumulado = v9am + v2pm;
-  } else {
+  } else if (corte === 3) {
     vAcumulado = vTotal;
   }
   const pctAcumulado = ((vAcumulado / limite) * 100).toFixed(2).replace(".", ",");
 
   const opcionesDia = { timeZone: "America/Caracas", weekday: "long" };
+  const opcionesFecha = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
+  const fechaStr = new Intl.DateTimeFormat("es-VE", opcionesFecha).format(new Date());
   const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
   const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
 
   return (
-    `*${diaSemana}*\n\n` +
+    `*${diaSemana} ${fechaStr}*\n\n` +
     `*Monagas*\n` +
     `Reporte de Encuestadores SEGEN en campo:\n\n` +
     `• ${linea9am}\n` +
