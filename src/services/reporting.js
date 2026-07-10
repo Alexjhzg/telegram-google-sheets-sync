@@ -1,5 +1,4 @@
-"use strict";
-
+import { config } from "../config/index.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "./sheets.js";
 
 /**
@@ -112,6 +111,17 @@ export async function enviarReporteDiario(api, corte = 3) {
     console.log(`[INFO] Enviando reporte consolidado (Corte: ${corte}) al Chat ID: ${chatId}`);
     await api.sendMessage(chatId, mensaje);
     console.log(`[INFO] Reporte consolidado del corte ${corte} enviado con éxito.`);
+
+    // Enviar copia al Gerente si está configurado
+    if (config.telegram.managerChatId) {
+      console.log(`[INFO] Enviando copia del reporte consolidado al Gerente (Chat ID: ${config.telegram.managerChatId})`);
+      try {
+        await api.sendMessage(config.telegram.managerChatId, mensaje);
+        console.log("[INFO] Copia del reporte enviada al Gerente con éxito.");
+      } catch (managerErr) {
+        console.error("[ERROR] Falló el envío del reporte al Gerente:", managerErr);
+      }
+    }
   } catch (err) {
     console.error(`[ERROR] Falló la generación/envío del reporte consolidado del corte ${corte}:`, err);
   }

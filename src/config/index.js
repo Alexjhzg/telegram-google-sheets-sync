@@ -21,6 +21,7 @@ for (const key of REQUIRED_VARS) {
 export const config = {
   telegram: {
     token: process.env.TELEGRAM_BOT_TOKEN,
+    managerChatId: process.env.TELEGRAM_MANAGER_CHAT_ID || null,
   },
 
   google: {
