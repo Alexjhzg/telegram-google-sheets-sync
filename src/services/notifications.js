@@ -1,5 +1,6 @@
 "use strict";
 
+import { config } from "../config/index.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "./sheets.js";
 
 /** ID de Chat de respaldo cuando no hay registros en Sheets aún. */
@@ -174,6 +175,17 @@ export async function enviarAvisoNodosFaltantes(api) {
     console.log(`[INFO] Enviando aviso de nodos faltantes al Chat ID: ${chatId}`);
     await api.sendMessage(chatId, mensaje, { parse_mode: "Markdown" });
     console.log("[INFO] Aviso de nodos faltantes enviado con éxito.");
+
+    // Enviar copia al Gerente si está configurado
+    if (config.telegram.managerChatId) {
+      console.log(`[INFO] Enviando copia del aviso de nodos faltantes al Gerente (Chat ID: ${config.telegram.managerChatId})`);
+      try {
+        await api.sendMessage(config.telegram.managerChatId, mensaje, { parse_mode: "Markdown" });
+        console.log("[INFO] Copia del aviso de nodos faltantes enviada al Gerente con éxito.");
+      } catch (managerErr) {
+        console.error("[ERROR] Falló el envío del aviso de nodos faltantes al Gerente:", managerErr);
+      }
+    }
   } catch (err) {
     console.error("[ERROR] Falló el envío del aviso de nodos faltantes:", err);
   }
