@@ -1,5 +1,7 @@
 "use strict";
 
+import { config } from "../config/index.js";
+
 /**
  * Obtiene el nombre del remitente de forma legible de un mensaje de Telegram.
  *
@@ -47,16 +49,19 @@ export async function reaccionar(ctx, emoji) {
   }
 }
 
+
 /**
- * Verifica si el usuario actual es administrador o el creador del chat.
+ * Verifica si el usuario actual es administrador o el creador del chat,
+ * o si está autorizado en chats privados a través de managerChatIds.
  *
  * @param {import("grammy").Context} ctx
  * @returns {Promise<boolean>}
  */
 export async function esUsuarioAdmin(ctx) {
-  // En chats privados, restringimos por defecto a menos que se defina otra lógica
+  // En chats privados, se permite si su ID está registrada en managerChatIds
   if (ctx.chat?.type === "private") {
-    return false;
+    const userId = String(ctx.from?.id);
+    return config.telegram.managerChatIds.includes(userId);
   }
 
   // Si el usuario es el canal anónimo o "GroupAnonymousBot", es admin de forma implícita

@@ -24,7 +24,10 @@ export function registrarComandos(bot) {
 
       // Verificar privilegios de administrador/propietario
       const isAdmin = await esUsuarioAdmin(ctx);
-      if (!isAdmin) return;
+      if (!isAdmin) {
+        await ctx.reply("⛔ No tienes permisos autorizados para solicitar reportes.");
+        return;
+      }
 
       const doc = await obtenerHojaDeCalculo();
       const mensaje = await generarReporteRealTime(doc);
