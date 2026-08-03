@@ -22,6 +22,9 @@ export const config = {
   telegram: {
     token: process.env.TELEGRAM_BOT_TOKEN,
     managerChatId: process.env.TELEGRAM_MANAGER_CHAT_ID || null,
+    managerChatIds: process.env.TELEGRAM_MANAGER_CHAT_ID
+      ? process.env.TELEGRAM_MANAGER_CHAT_ID.split(",").map((id) => id.trim()).filter(Boolean)
+      : [],
   },
 
   google: {

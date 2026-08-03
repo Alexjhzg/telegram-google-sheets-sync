@@ -176,14 +176,16 @@ export async function enviarAvisoNodosFaltantes(api) {
     await api.sendMessage(chatId, mensaje, { parse_mode: "Markdown" });
     console.log("[INFO] Aviso de nodos faltantes enviado con éxito.");
 
-    // Enviar copia al Gerente si está configurado
-    if (config.telegram.managerChatId) {
-      console.log(`[INFO] Enviando copia del aviso de nodos faltantes al Gerente (Chat ID: ${config.telegram.managerChatId})`);
-      try {
-        await api.sendMessage(config.telegram.managerChatId, mensaje, { parse_mode: "Markdown" });
-        console.log("[INFO] Copia del aviso de nodos faltantes enviada al Gerente con éxito.");
-      } catch (managerErr) {
-        console.error("[ERROR] Falló el envío del aviso de nodos faltantes al Gerente:", managerErr);
+    // Enviar copia a los privados/gerentes si están configurados
+    if (config.telegram.managerChatIds.length > 0) {
+      for (const managerId of config.telegram.managerChatIds) {
+        console.log(`[INFO] Enviando copia del aviso de nodos faltantes al privado (Chat ID: ${managerId})`);
+        try {
+          await api.sendMessage(managerId, mensaje, { parse_mode: "Markdown" });
+          console.log(`[INFO] Copia del aviso de nodos faltantes enviada a ${managerId} con éxito.`);
+        } catch (managerErr) {
+          console.error(`[ERROR] Falló el envío del aviso de nodos faltantes al privado ${managerId}:`, managerErr);
+        }
       }
     }
   } catch (err) {
