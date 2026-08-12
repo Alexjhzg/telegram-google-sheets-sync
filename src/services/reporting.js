@@ -28,6 +28,21 @@ export function determinarCorteActivoVET() {
 }
 
 /**
+ * Retorna el mensaje formateado de la leyenda explicativa de la simbología utilizada en los reportes.
+ *
+ * @returns {string}
+ */
+export function obtenerLeyendaEmojis() {
+  return (
+    `ℹ️ *LEYENDA DE SIMBOLOGÍA DE REPORTES*\n\n` +
+    `📍 *Municipio:* Entidad geográfica a la que pertenece el nodo.\n` +
+    `❌ *Sin reporte:* El nodo no ha enviado ningún mensaje de reporte durante el día.\n` +
+    `⚠️ *Reportó 0:* Se envió el reporte del nodo pero registraron 0 verificadores.\n` +
+    `📉 *Reportó incompleto:* Se reportaron verificadores en campo sin alcanzar la capacidad total del nodo.`
+  );
+}
+
+/**
  * Construye el mensaje consolidado general del Estado Monagas desde 'formato_reporte'.
  *
  * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
@@ -240,17 +255,18 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
 
 /**
  * Genera el reporte consolidado del estado Monagas en tiempo real.
- * Determina el corte horario dinámicamente según la hora actual y devuelve 2 mensajes.
+ * Determina el corte horario dinámicamente según la hora actual y devuelve 3 mensajes.
  *
  * @param {object} doc - Instancia cargada de GoogleSpreadsheet.
- * @returns {Promise<string[]>} Arreglo con [mensajeConsolidado, mensajeDesglose].
+ * @returns {Promise<string[]>} Arreglo con [mensajeConsolidado, mensajeDesglose, mensajeLeyenda].
  */
 export async function generarReporteRealTime(doc) {
   const corte = determinarCorteActivoVET();
   const mensajeConsolidado = await obtenerConsolidadoGeneral(doc, corte);
   const { mensajeDesglose } = await obtenerDesgloseFaltantes(doc, corte);
+  const mensajeLeyenda = obtenerLeyendaEmojis();
 
-  return [mensajeConsolidado, mensajeDesglose];
+  return [mensajeConsolidado, mensajeDesglose, mensajeLeyenda];
 }
 
 /**
@@ -265,6 +281,7 @@ export async function enviarReporteDiario(api, corte = 3) {
     const doc = await obtenerHojaDeCalculo();
     const mensajeConsolidado = await obtenerConsolidadoGeneral(doc, corte);
     const { mensajeDesglose } = await obtenerDesgloseFaltantes(doc, corte);
+    const mensajeLeyenda = obtenerLeyendaEmojis();
 
     let chatId = process.env.TELEGRAM_REPORT_CHAT_ID;
     if (!chatId) {
@@ -289,11 +306,12 @@ export async function enviarReporteDiario(api, corte = 3) {
 
     if (config.telegram.managerChatIds.length > 0) {
       for (const managerId of config.telegram.managerChatIds) {
-        console.log(`[INFO] Enviando reporte y desglose de faltantes individualmente al encargado (Chat ID: ${managerId})`);
+        console.log(`[INFO] Enviando reporte, desglose y leyenda individualmente al encargado (Chat ID: ${managerId})`);
         try {
           await api.sendMessage(managerId, mensajeConsolidado, { parse_mode: "Markdown" });
           await api.sendMessage(managerId, mensajeDesglose, { parse_mode: "Markdown" });
-          console.log(`[INFO] Copia del reporte y desglose enviadas individualmente a ${managerId} con éxito.`);
+          await api.sendMessage(managerId, mensajeLeyenda, { parse_mode: "Markdown" });
+          console.log(`[INFO] Copia del reporte, desglose y leyenda enviadas individualmente a ${managerId} con éxito.`);
         } catch (managerErr) {
           console.error(`[ERROR] Falló el envío del reporte al encargado ${managerId}:`, managerErr);
         }
