@@ -204,7 +204,7 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
   }
 
   let mensajeDesglose =
-    `📍 *DESGLOSE DE FALTANTES POR MUNICIPIO Y NODO*\n` +
+    `📊 *DESGLOSE DE FALTANTES POR MUNICIPIO Y NODO*\n` +
     `⚠️ *Total Faltaron por Salir en el Estado:* ${faltantesEstado}/${limiteEstado} = *${pctFaltantesEstado}%*\n\n` +
     `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
@@ -213,7 +213,7 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
     .sort((a, b) => a.municipio.localeCompare(b.municipio));
 
   for (const m of municipiosOrdenados) {
-    mensajeDesglose += `🔹 *${m.municipio}* (Faltan: ${m.faltan} | Salieron: ${m.salieron}/${m.capacidad})\n`;
+    mensajeDesglose += `📍 *${m.municipio}* (Faltan: ${m.faltan} | Salieron: ${m.salieron}/${m.capacidad})\n`;
 
     const nodosFaltantes = m.nodos
       .filter((n) => n.faltantesNodo > 0)
@@ -222,11 +222,11 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
     for (const n of nodosFaltantes) {
       let etiquetaEstado = "";
       if (!n.tieneReporte) {
-        etiquetaEstado = `(Sin reporte 🚫)`;
+        etiquetaEstado = `(Sin reporte ❌)`;
       } else if (n.reportadoNodo === 0) {
         etiquetaEstado = `(Reportó 0/${n.limiteNodo} ⚠️)`;
       } else {
-        etiquetaEstado = `(Reportó ${n.reportadoNodo}/${n.limiteNodo} ⚠️)`;
+        etiquetaEstado = `(Reportó ${n.reportadoNodo}/${n.limiteNodo} 📉)`;
       }
 
       mensajeDesglose += `  • Nodo ${n.nodo}: Faltan ${n.faltantesNodo} ${etiquetaEstado}\n`;
