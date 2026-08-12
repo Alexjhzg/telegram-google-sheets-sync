@@ -30,9 +30,12 @@ export function registrarComandos(bot) {
       }
 
       const doc = await obtenerHojaDeCalculo();
-      const mensaje = await generarReporteRealTime(doc);
+      const mensajes = await generarReporteRealTime(doc);
 
-      await ctx.reply(mensaje, { parse_mode: "Markdown" });
+      const listaMensajes = Array.isArray(mensajes) ? mensajes : [mensajes];
+      for (const msg of listaMensajes) {
+        await ctx.reply(msg, { parse_mode: "Markdown" });
+      }
     } catch (error) {
       console.error("[ERROR] Falló al ejecutar el comando /reporte:", error);
       await ctx.reply("❌ Ocurrió un error al generar el reporte.");
