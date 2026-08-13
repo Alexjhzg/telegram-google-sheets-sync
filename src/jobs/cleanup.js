@@ -56,14 +56,53 @@ async function mensajeExiste(api, chatId, messageId) {
 }
 
 /**
+ * Verifica si la hora actual en la zona horaria configurada (America/Caracas)
+ * se encuentra dentro del horario laboral activo (07:00 AM a 06:30 PM).
+ *
+ * @returns {boolean} `true` si se encuentra en horario laboral, `false` en caso contrario.
+ */
+export function esHorarioLaboral() {
+  const tz = config.app.timezone || "America/Caracas";
+  const now = new Date();
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(now);
+  let hour = 0;
+  let minute = 0;
+  for (const part of parts) {
+    if (part.type === "hour") hour = parseInt(part.value, 10);
+    if (part.type === "minute") minute = parseInt(part.value, 10);
+  }
+  if (hour === 24) hour = 0;
+
+  const currentMinutes = hour * 60 + minute;
+  const startMinutes = (config.app.workStartHour ?? 7) * 60;
+  const endMinutes = (config.app.workEndHour ?? 18) * 60 + (config.app.workEndMinute ?? 30);
+
+  return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+}
+
+/**
  * Recorre las filas de Google Sheets que tengan un ID de mensaje registrado
  * y resetea aquellas cuyo mensaje ya no exista en Telegram o lleven más de
  * 5 minutos en estado de revisión.
  *
  * @param {import("grammy").Api} api - API de Telegram para verificar mensajes.
  * @param {number} limiteFilas - Límite de filas más recientes a analizar.
+ * @param {boolean} force - Si es `true`, omite la verificación de horario laboral.
  */
-export async function ejecutarLimpieza(api, limiteFilas = 15) {
+export async function ejecutarLimpieza(api, limiteFilas = 15, force = false) {
+  if (!force && !esHorarioLaboral()) {
+    console.log("[INFO] Limpieza periódica en pausa (fuera del horario laboral 07:00 - 18:30 VET).");
+    return;
+  }
+
   return sheetsMutex.runExclusive(async () => {
     console.log(`[INFO] Iniciando limpieza de mensajes eliminados en Telegram (límite: ${limiteFilas} filas)...`);
     try {
@@ -137,11 +176,12 @@ export async function ejecutarLimpieza(api, limiteFilas = 15) {
  * @param {import("grammy").Api} api
  */
 export function programarLimpieza(api) {
-  // 1. Limpieza inicial al arrancar el bot
-  setTimeout(() => ejecutarLimpieza(api, 60), config.app.cleanupInitialDelayMs);
+  // 1. Limpieza inicial al arrancar el bot (forzada para garantizar consistencia al encender)
+  setTimeout(() => ejecutarLimpieza(api, 60, true), config.app.cleanupInitialDelayMs);
 
-  // 2. Limpieza periódica continua (cada 5 minutos)
+  // 2. Limpieza periódica continua (cada 5 minutos, respetando horario laboral)
   new Cron("*/5 * * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 60));
+
 
   // 3. Limpieza de precisión en las horas de corte (9am, 2pm, 6pm)
   const jobCortes = new Cron("0 9,14,18 * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 60));

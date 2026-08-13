@@ -49,5 +49,10 @@ export const config = {
     cleanupInitialDelayMs: 10_000,
     // Retardo entre verificaciones individuales de mensajes en la limpieza (ms)
     cleanupRequestDelayMs: 500,
+    // Horario laboral activo para monitoreo y limpieza periódica (07:00 AM - 06:30 PM VET)
+    workStartHour: 7,
+    workEndHour: 18,
+    workEndMinute: 30,
   },
 };
+
