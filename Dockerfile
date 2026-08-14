@@ -1,9 +1,9 @@
 # ──────────────────────────────────────────────────────────────
 # Dockerfile — Bot de Telegram para supervisión en campo
-# Imagen base: node:20-alpine (liviana y segura para producción)
+# Imagen base: node:22-alpine (liviana y segura para producción)
 # ──────────────────────────────────────────────────────────────
 
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Metadatos de la imagen
 LABEL maintainer="equipo-devops"
