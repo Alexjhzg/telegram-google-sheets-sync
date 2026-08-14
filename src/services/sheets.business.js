@@ -12,6 +12,7 @@ import {
   COLUMNAS,
   asegurarColumnas,
   buscarFilaPorNodo,
+  normalizarTexto,
 } from "./sheets.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,7 +101,7 @@ export async function ordenarYLimpiarHojaPrincipal(doc) {
     const catalogoSet = new Set(
       filasNodos
         .map(r => {
-          const mun = (r.get("MUNICIPIO") || "").trim().toLowerCase();
+          const mun = normalizarTexto(r.get("MUNICIPIO"));
           const nod = parseInt(r.get("NODO") || "0", 10);
           return (mun && nod) ? `${mun}-${nod}` : null;
         })
@@ -113,7 +114,7 @@ export async function ordenarYLimpiarHojaPrincipal(doc) {
 
     for (let i = filas.length - 1; i >= 0; i--) {
       const fila = filas[i];
-      const mun  = (fila.get(COLUMNAS.MUNICIPIO) || "").trim().toLowerCase();
+      const mun  = normalizarTexto(fila.get(COLUMNAS.MUNICIPIO));
       const nod  = parseInt(fila.get(COLUMNAS.NODO) || "0", 10);
 
       if ((!mun && !nod) || (mun && nod && !catalogoSet.has(`${mun}-${nod}`))) {

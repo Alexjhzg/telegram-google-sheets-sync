@@ -34,6 +34,15 @@ export const config = {
     privateKey: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
   },
 
+  db: {
+    url: process.env.DATABASE_URL || process.env.DB_URL || process.env.SUPABASE_URL || null,
+    key: process.env.DATABASE_KEY || process.env.DB_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || null,
+    enabled: !!(
+      (process.env.DATABASE_URL || process.env.DB_URL || process.env.SUPABASE_URL) &&
+      (process.env.DATABASE_KEY || process.env.DB_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
+    ),
+  },
+
   app: {
     // Zona horaria de Venezuela
     timezone: "America/Caracas",

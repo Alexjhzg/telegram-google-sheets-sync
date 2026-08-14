@@ -1,5 +1,7 @@
 "use strict";
 
+import { normalizarTexto } from "./sheets.js";
+
 /**
  * Valida si la combinación de Municipio y Nodo existe en la hoja de catálogo oficial 'verificadores_nodo'.
  *
@@ -15,25 +17,18 @@ export async function validarMunicipioNodo(doc, municipio, nodo) {
     throw new Error("Falta la hoja 'verificadores_nodo'");
   }
 
-  const normalizar = (txt) =>
-    (txt || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, ""); // Quitar acentos/tildes
-
-  const municipioNormalizado = normalizar(municipio);
+  const municipioNormalizado = normalizarTexto(municipio);
 
   const filasNodos = await hojaNodos.getRows();
 
   // Buscar si el municipio existe en alguna parte del catálogo para extraer su nombre oficial
-  const filaMunicipio = filasNodos.find(fila => normalizar(fila.get("MUNICIPIO")) === municipioNormalizado);
+  const filaMunicipio = filasNodos.find(fila => normalizarTexto(fila.get("MUNICIPIO")) === municipioNormalizado);
   const municipioExiste = !!filaMunicipio;
   const municipioOficialDetectado = filaMunicipio ? (filaMunicipio.get("MUNICIPIO") || "").trim() : municipio;
 
   // Buscar el registro exacto de la combinación municipio + nodo
   const registroOficial = filasNodos.find(fila => {
-    const mun = normalizar(fila.get("MUNICIPIO"));
+    const mun = normalizarTexto(fila.get("MUNICIPIO"));
     const nod = parseInt(fila.get("NODO") || "0", 10);
     return mun === municipioNormalizado && nod === nodo;
   });

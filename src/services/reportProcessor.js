@@ -14,6 +14,14 @@ import {
   sheetsMutex,
 } from "./sheets.js";
 
+import {
+  esDBActiva,
+  guardarOActualizarReporteDB,
+  validarMunicipioNodoDB,
+  registrarAuditoriaDB,
+} from "./database.js";
+import { sincronizarReporteAGoogleSheets } from "./syncService.js";
+
 /**
  * Resetea en Google Sheets el registro correspondiente a un ID de mensaje.
  *
@@ -76,17 +84,9 @@ export async function marcarFilaParaRevision(doc, messageId) {
  * 2. Valida municipio y nodo contra la base de datos oficial.
  * 3. Carga el historial del mismo día en la hoja principal.
  * 4. Calcula la acumulación por bloques y valida el límite oficial.
- * 5. Guarda o actualiza el registro en la hoja de cálculo.
+ * 5. Guarda o actualiza el registro en Supabase (si está activo) y Google Sheets.
  *
  * @param {object} params
- * @param {object} params.reporte - Datos parseados del reporte.
- * @param {{ fecha: string, hora: string }} params.tiempo - Fecha/hora del mensaje.
- * @param {string} params.remitente - Nombre del remitente.
- * @param {number} params.messageId - ID de mensaje.
- * @param {number} params.chatId - ID del chat de Telegram.
- * @param {number|null} params.creationTimestamp - Timestamp de creación.
- * @param {number|null} params.editTimestamp - Timestamp de edición (si aplica).
- * @param {boolean} params.esEdicion - Indica si es una edición.
  * @returns {Promise<object>} Resultado estructurado del procesamiento.
  */
 export async function procesarYGuardarReporte({
@@ -99,49 +99,61 @@ export async function procesarYGuardarReporte({
   editTimestamp,
   esEdicion,
 }) {
+  const { municipio, nodo, totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
+
+  let timestamp = creationTimestamp;
+  let tiempoFinal = tiempo;
+
+  // Evaluar holgura para la clasificación por bloques de mensajes editados
+  if (esEdicion && editTimestamp) {
+    const diffMins = (editTimestamp - creationTimestamp) / 60;
+    const holgura = config.app.reportEditGracePeriodMins;
+
+    if (diffMins > holgura) {
+      console.log(`[INFO] Reporte editado después de la holgura (${Math.round(diffMins)} min > ${holgura} min). Usando fecha de edición para el bloque.`);
+      timestamp = editTimestamp;
+      tiempoFinal = convertirTimestamp(timestamp);
+    } else {
+      console.log(`[INFO] Reporte editado dentro de la holgura (${Math.round(diffMins)} min <= ${holgura} min). Usando fecha de creación original.`);
+    }
+  }
+
+  const { fecha, hora } = tiempoFinal;
+
+  // 1. Obtener la hora y bloque activo en hora de Venezuela
+  const { horaStr, bloqueActivo, bloqueStr } = obtenerBloqueYHoraActivo(timestamp);
+  console.log(`[INFO] Mensaje procesado a las ${horaStr} (Hora VE). Bloque Activo: ${bloqueStr}.`);
+
+  const doc = await obtenerHojaDeCalculo();
+
+  // 2. Validar Municipio y Nodo contra catálogo oficial (Base de Datos o Google Sheets)
+  let validacion;
+  if (esDBActiva()) {
+    try {
+      validacion = await validarMunicipioNodoDB(municipio, nodo);
+    } catch (e) {
+      console.warn("[ADVERTENCIA] Falló validación en Base de Datos, utilizando fallback a Google Sheets:", e.message);
+      validacion = await validarMunicipioNodo(doc, municipio, nodo);
+    }
+  } else {
+    validacion = await validarMunicipioNodo(doc, municipio, nodo);
+  }
+
+  const { valido, limiteVerificadores, municipioOficial, razon } = validacion;
+  if (!valido) {
+    if (esEdicion) {
+      await marcarFilaParaRevision(doc, messageId);
+    }
+    return {
+      valido: false,
+      razon,
+      municipioOficial,
+      municipioParseado: municipio,
+      nodoParseado: nodo
+    };
+  }
+
   return sheetsMutex.runExclusive(async () => {
-    const { municipio, nodo, totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
-
-    let timestamp = creationTimestamp;
-    let tiempoFinal = tiempo;
-
-    // Evaluar holgura para la clasificación por bloques de mensajes editados
-    if (esEdicion && editTimestamp) {
-      const diffMins = (editTimestamp - creationTimestamp) / 60;
-      const holgura = config.app.reportEditGracePeriodMins;
-
-      if (diffMins > holgura) {
-        console.log(`[INFO] Reporte editado después de la holgura (${Math.round(diffMins)} min > ${holgura} min). Usando fecha de edición para el bloque.`);
-        timestamp = editTimestamp;
-        tiempoFinal = convertirTimestamp(timestamp);
-      } else {
-        console.log(`[INFO] Reporte editado dentro de la holgura (${Math.round(diffMins)} min <= ${holgura} min). Usando fecha de creación original.`);
-      }
-    }
-
-    const { fecha, hora } = tiempoFinal;
-
-    // 1. Obtener la hora y bloque activo en hora de Venezuela
-    const { horaStr, bloqueActivo, bloqueStr } = obtenerBloqueYHoraActivo(timestamp);
-    console.log(`[INFO] Mensaje procesado a las ${horaStr} (Hora VE). Bloque Activo: ${bloqueStr}.`);
-
-    const doc = await obtenerHojaDeCalculo();
-
-    // 2. Validar Municipio y Nodo contra catálogo oficial
-    const { valido, limiteVerificadores, municipioOficial, razon } = await validarMunicipioNodo(doc, municipio, nodo);
-    if (!valido) {
-      if (esEdicion) {
-        await _marcarFilaParaRevision(doc, messageId);
-      }
-      return {
-        valido: false,
-        razon, // "MUNICIPIO_INCORRECTO" o "NODO_INCORRECTO"
-        municipioOficial,
-        municipioParseado: municipio,
-        nodoParseado: nodo
-      };
-    }
-
     // 3. Cargar hoja principal y buscar la fila fija del nodo
     const hoja = doc.sheetsByTitle["registros_telegram"];
     await asegurarColumnas(hoja);
@@ -207,7 +219,7 @@ export async function procesarYGuardarReporte({
       `\n│    • Prev B3 (6pm):      ${historial.b3}` +
       `\n│    • Prev Total:         ${historial.total}` +
       `\n│` +
-      `\n│ 💾 VALORES RESULTANTES A GUARDAR EN SHEET:` +
+      `\n│ 💾 VALORES RESULTANTES A GUARDAR:` +
       `\n│    • Final B1 (9am):     ${b1Final}` +
       `\n│    • Final B2 (2pm):     ${b2Final}` +
       `\n│    • Final B3 (6pm):     ${b3Final}` +
@@ -215,7 +227,38 @@ export async function procesarYGuardarReporte({
       `\n└────────────────────────────────────────────────────────┘\n`
     );
 
-    const datos = {
+    const datosFinales = {
+      municipioOficial,
+      nodo,
+      fecha,
+      hora,
+      b1Final,
+      b2Final,
+      b3Final,
+      totalFinal,
+      remitente,
+      messageId,
+      chatId,
+    };
+
+    // 6. Guardar en Base de Datos si está habilitada
+    if (esDBActiva()) {
+      try {
+        await guardarOActualizarReporteDB(datosFinales);
+        await registrarAuditoriaDB({
+          chatId,
+          messageId,
+          remitente,
+          accion: esEdicion ? "EDICION" : "CREACION",
+          detalles: datosFinales,
+        });
+      } catch (errDb) {
+        console.error("[ERROR] Falló guardado en Base de Datos:", errDb.message);
+      }
+    }
+
+    // 7. Sincronizar / guardar en Google Sheets
+    const datosHoja = {
       [COLUMNAS.MUNICIPIO]:           municipioOficial,
       [COLUMNAS.NODO]:                nodo,
       [COLUMNAS.TOTAL_VERIFICADORES]: totalFinal,
@@ -231,12 +274,12 @@ export async function procesarYGuardarReporte({
     };
 
     if (filaExistente) {
-      filaExistente.assign(datos);
+      filaExistente.assign(datosHoja);
       await filaExistente.save();
-      console.log(`[INFO] Fila fija actualizada (Municipio: ${municipioOficial}, Nodo: ${nodo}, Mensaje ID: ${messageId}).`);
+      console.log(`[INFO] Fila fija actualizada en Google Sheets (Municipio: ${municipioOficial}, Nodo: ${nodo}, Mensaje ID: ${messageId}).`);
     } else {
-      await hoja.addRow(datos);
-      console.log(`[INFO] Fila nueva creada como fallback (Mensaje ID: ${messageId}).`);
+      await hoja.addRow(datosHoja);
+      console.log(`[INFO] Fila nueva creada en Google Sheets como fallback (Mensaje ID: ${messageId}).`);
     }
 
     return {

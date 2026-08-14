@@ -5,12 +5,15 @@
   "main": "bot.js",
   "type": "module",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "test": "node --test",
+    "db:seed": "node scripts/seed_catalog.js"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "croner": "^10.0.1",
     "dotenv": "^16.4.5",
     "google-auth-library": "^9.11.0",

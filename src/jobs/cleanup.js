@@ -16,43 +16,22 @@ import { enviarAvisoCierre, enviarAvisoNodosFaltantes } from "../services/notifi
 
 
 /**
- * Verifica si un mensaje de Telegram sigue existiendo intentando
- * llamar a editMessageReplyMarkup con una lista vacía (operación no destructiva).
+ * Verifica de manera segura si un mensaje existe.
+ * NOTA: La API de Telegram NO permite a los bots editar ni consultar directamente
+ * el estado de mensajes enviados por usuarios en grupos. Para evitar falsos positivos
+ * que borren datos válidos de Google Sheets, asumimos que los mensajes válidos existen
+ * a menos que el usuario edite explícitamente su mensaje a "eliminar" o esté en estado de revisión expirada.
  *
  * @param {import("grammy").Api} api - API de Telegram.
  * @param {number} chatId
  * @param {number} messageId
- * @returns {Promise<boolean>} `true` si el mensaje existe, `false` si fue borrado.
+ * @returns {Promise<boolean>}
  */
 async function mensajeExiste(api, chatId, messageId) {
-  try {
-    // Como el mensaje fue enviado por un usuario (y no por el bot), si el mensaje existe
-    // esta llamada FALLARÁ con "message can't be edited". Si fue borrado, fallará con
-    // "message to edit not found". Esto nos permite verificar 100% silenciosamente.
-    await api.editMessageReplyMarkup(chatId, messageId, { reply_markup: { inline_keyboard: [] } });
-    return true;
-  } catch (error) {
-    const desc = (error.description || "").toLowerCase();
-
-    if (
-      desc.includes("message to edit not found") ||
-      desc.includes("message_id_invalid") ||
-      desc.includes("message not found")
-    ) {
-      return false;
-    }
-
-    if (
-      desc.includes("message can't be edited") ||
-      desc.includes("message is not modified")
-    ) {
-      return true;
-    }
-
-    // Otro error (rate-limit, permisos…): asumir que existe para no borrar datos válidos.
-    console.warn(`[ADVERTENCIA] No se pudo verificar Mensaje ID ${messageId} en Chat ${chatId}: ${error.message}`);
-    return true;
-  }
+  // Para evitar que errores de API borren datos aprobados en Google Sheets,
+  // asumimos por defecto que el mensaje existe. La eliminación manual está garantizada
+  // por el handler de mensajes editados en message.js (REGEX_ELIMINAR).
+  return true;
 }
 
 /**

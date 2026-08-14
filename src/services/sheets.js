@@ -78,6 +78,20 @@ export async function asegurarColumnas(hoja) {
 }
 
 /**
+ * Normaliza cualquier texto removiendo tildes, diacríticos, mayúsculas y espacios extra.
+ * @param {string} txt
+ * @returns {string}
+ */
+export function normalizarTexto(txt) {
+  return (txt || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+/**
  * Busca en la hoja la fila cuyo ID de mensaje coincida.
  * @param {import("google-spreadsheet").GoogleSpreadsheetRow[]} filas
  * @param {number|string} messageId
@@ -98,10 +112,13 @@ export function buscarFilaPorMensaje(filas, messageId) {
  * @returns {import("google-spreadsheet").GoogleSpreadsheetRow | null}
  */
 export function buscarFilaPorNodo(filas, municipioOficial, nodo) {
+  const munBuscado = normalizarTexto(municipioOficial);
+  const nodBuscado = parseInt(nodo, 10);
+
   return filas.find((fila) => {
-    const mun = (fila.get(COLUMNAS.MUNICIPIO) || "").trim().toLowerCase();
-    const nod = parseInt(fila.get(COLUMNAS.NODO) || "0", 10);
-    return mun === municipioOficial.trim().toLowerCase() && nod === nodo;
+    const munFila = normalizarTexto(fila.get(COLUMNAS.MUNICIPIO));
+    const nodFila = parseInt(fila.get(COLUMNAS.NODO) || "0", 10);
+    return munFila === munBuscado && nodFila === nodBuscado;
   }) ?? null;
 }
 
@@ -303,16 +320,18 @@ export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
  */
 export function obtenerUltimosValores(filas, municipio, nodo, fechaActual, filaExcluida = null) {
   let total = 0, b1 = 0, b2 = 0, b3 = 0;
+  const munBuscado = normalizarTexto(municipio);
+  const nodBuscado = parseInt(nodo, 10);
 
   for (let i = filas.length - 1; i >= 0; i--) {
     if (filaExcluida && filas[i].rowNumber === filaExcluida.rowNumber) continue;
 
-    const obj     = filas[i].toObject();
-    const munFila = (obj[COLUMNAS.MUNICIPIO] || "").trim().toLowerCase();
+    const obj      = filas[i].toObject();
+    const munFila  = normalizarTexto(obj[COLUMNAS.MUNICIPIO]);
     const nodoFila = parseInt(obj[COLUMNAS.NODO], 10);
     const fechaFila = obj[COLUMNAS.FECHA] || "";
 
-    if (munFila !== municipio.trim().toLowerCase() || nodoFila !== nodo) continue;
+    if (munFila !== munBuscado || nodoFila !== nodBuscado) continue;
     if (fechaFila !== fechaActual) continue; // ¡Solo del mismo día!
 
     if (!total) total = parseInt(obj[COLUMNAS.TOTAL_VERIFICADORES] || "0", 10);
