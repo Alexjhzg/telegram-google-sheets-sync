@@ -306,12 +306,17 @@ export async function enviarReporteDiario(api, corte = 3) {
 
     if (config.telegram.managerChatIds.length > 0) {
       for (const managerId of config.telegram.managerChatIds) {
-        console.log(`[INFO] Enviando reporte, desglose y leyenda individualmente al encargado (Chat ID: ${managerId})`);
+        console.log(`[INFO] Enviando resumen de porcentajes a Gerencia (Chat ID: ${managerId})`);
         try {
+          // En todos los cortes se envía el Resumen Consolidado de Porcentajes
           await api.sendMessage(managerId, mensajeConsolidado, { parse_mode: "Markdown" });
-          await api.sendMessage(managerId, mensajeDesglose, { parse_mode: "Markdown" });
-          await api.sendMessage(managerId, mensajeLeyenda, { parse_mode: "Markdown" });
-          console.log(`[INFO] Copia del reporte, desglose y leyenda enviadas individualmente a ${managerId} con éxito.`);
+          
+          // Únicamente al final de la jornada (Corte 3 - 6:05 PM) se adjunta el desglose detallado de faltantes y la leyenda
+          if (corte === 3) {
+            await api.sendMessage(managerId, mensajeDesglose, { parse_mode: "Markdown" });
+            await api.sendMessage(managerId, mensajeLeyenda, { parse_mode: "Markdown" });
+          }
+          console.log(`[INFO] Reporte del corte ${corte} enviado individualmente a ${managerId} con éxito.`);
         } catch (managerErr) {
           console.error(`[ERROR] Falló el envío del reporte al encargado ${managerId}:`, managerErr);
         }

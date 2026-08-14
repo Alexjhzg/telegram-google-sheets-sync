@@ -179,10 +179,9 @@ export function programarLimpieza(api) {
     });
   });
 
-  // 5. Reportes consolidados por cortes
+  // 5. Reportes consolidados de porcentajes por cortes
   const jobReporte9am = new Cron("5 9 * * *",  { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 1));
   const jobReporte2pm = new Cron("5 14 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 2));
-  /* eslint-disable-next-line no-unused-vars */
   const jobReporte6pm = new Cron("5 18 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 3));
 
   // 6. Avisos de cierre de bloque
@@ -211,6 +210,6 @@ export function programarLimpieza(api) {
   const fmtFull = { timeZone: "America/Caracas", weekday: "long", hour: "2-digit", minute: "2-digit" };
 
   console.log(`[INFO] Limpieza horaria activa. Siguiente corte a las ${jobCortes.nextRun().toLocaleTimeString("es-VE", fmtTime)} (VET).`);
-  console.log(`[INFO] Reporte diario activo. Siguiente envío el ${jobReporte9am.nextRun().toLocaleDateString("es-VE", fmtFull)} (VET).`);
+  console.log(`[INFO] Reportes diarios a Gerencia activos (9:05am, 2:05pm, 6:05pm VET). Siguiente envío el ${jobReporte9am.nextRun().toLocaleDateString("es-VE", fmtFull)} (VET).`);
   console.log(`[INFO] Historial diario activo. Siguiente guardado el ${jobHistorico.nextRun().toLocaleDateString("es-VE", fmtFull)} (VET).`);
 }
