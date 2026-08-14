@@ -112,11 +112,20 @@ export async function guardarOActualizarReporteDB(datos) {
 
   const munNormalizado = normalizarTexto(datos.municipioOficial);
 
+  // Convertir fecha de DD/MM/YYYY a YYYY-MM-DD para la columna DATE de PostgreSQL
+  let fechaISO = datos.fecha;
+  if (datos.fecha && datos.fecha.includes("/")) {
+    const partes = datos.fecha.split("/");
+    if (partes.length === 3) {
+      fechaISO = `${partes[2]}-${partes[1].padStart(2, "0")}-${partes[0].padStart(2, "0")}`;
+    }
+  }
+
   const payload = {
     municipio: datos.municipioOficial,
     municipio_normalizado: munNormalizado,
     nodo: parseInt(datos.nodo, 10),
-    fecha: datos.fecha,
+    fecha: fechaISO,
     hora: datos.hora,
     bloque_1: datos.b1Final,
     bloque_2: datos.b2Final,
