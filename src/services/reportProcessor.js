@@ -131,6 +131,13 @@ export async function procesarYGuardarReporte({
   if (esDBActiva()) {
     try {
       validacion = await validarMunicipioNodoDB(municipio, nodo);
+      if (!validacion.valido) {
+        // Si la tabla de la BD aún no tiene poblado este nodo, validar por resguardo en Google Sheets
+        const valSheets = await validarMunicipioNodo(doc, municipio, nodo);
+        if (valSheets.valido) {
+          validacion = valSheets;
+        }
+      }
     } catch (e) {
       console.warn("[ADVERTENCIA] Falló validación en Base de Datos, utilizando fallback a Google Sheets:", e.message);
       validacion = await validarMunicipioNodo(doc, municipio, nodo);
