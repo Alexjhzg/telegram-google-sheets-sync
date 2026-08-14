@@ -18,7 +18,14 @@ export function obtenerClienteDB() {
   if (!dbClient) {
     console.log("[INFO] Inicializando cliente de Base de Datos relacional...");
     dbClient = createClient(config.db.url, config.db.key, {
-      auth: { persistSession: false },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      realtime: {
+        disabled: true,
+      },
     });
   }
 
