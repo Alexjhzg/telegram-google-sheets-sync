@@ -145,7 +145,11 @@ export async function guardarOActualizarReporteDB(datos) {
     .single();
 
   if (error) {
-    console.error("[ERROR] Error al hacer upsert en la Base de Datos:", error.message);
+    if (error.code === "23503") {
+      console.warn(`[ADVERTENCIA] No se pudo guardar en BD: El nodo ${datos.nodo} (${datos.municipioOficial}) no se encuentra en nodos_catalogo.`);
+    } else {
+      console.error("[ERROR] Error al hacer upsert en la Base de Datos:", error.message);
+    }
     throw error;
   }
 

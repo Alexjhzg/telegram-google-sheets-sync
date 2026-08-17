@@ -39,7 +39,12 @@ CREATE TABLE IF NOT EXISTS reportes_diarios (
     sincronizado_sheets BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT unq_nodo_fecha UNIQUE (nodo, fecha)
+    CONSTRAINT unq_nodo_fecha UNIQUE (nodo, fecha),
+    CONSTRAINT fk_reportes_nodos_catalogo 
+        FOREIGN KEY (municipio_normalizado, nodo) 
+        REFERENCES nodos_catalogo (municipio_normalizado, nodo) 
+        ON UPDATE CASCADE 
+        ON DELETE RESTRICT
 );
 
 -- Índices para consultas por fecha, nodo y estado
