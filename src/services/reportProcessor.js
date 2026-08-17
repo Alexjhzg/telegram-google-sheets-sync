@@ -19,6 +19,7 @@ import {
   guardarOActualizarReporteDB,
   validarMunicipioNodoDB,
   registrarAuditoriaDB,
+  marcarReporteSincronizadoDB,
 } from "./database.js";
 import { sincronizarReporteAGoogleSheets } from "./syncService.js";
 
@@ -287,6 +288,11 @@ export async function procesarYGuardarReporte({
     } else {
       await hoja.addRow(datosHoja);
       console.log(`[INFO] Fila nueva creada en Google Sheets como fallback (Mensaje ID: ${messageId}).`);
+    }
+
+    // 8. Marcar en la Base de Datos que la sincronización con Sheets se completó con éxito
+    if (esDBActiva()) {
+      await marcarReporteSincronizadoDB(nodo, fecha);
     }
 
     return {

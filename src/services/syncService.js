@@ -7,7 +7,7 @@ import {
   COLUMNAS,
   sheetsMutex,
 } from "./sheets.js";
-import { obtenerClienteDB, esDBActiva } from "./database.js";
+import { esDBActiva, marcarReporteSincronizadoDB } from "./database.js";
 
 /**
  * Sincroniza un reporte específico hacia Google Sheets.
@@ -53,14 +53,7 @@ export async function sincronizarReporteAGoogleSheets(datosReporte) {
 
       // Marcar como sincronizado en la Base de Datos si está activa
       if (esDBActiva()) {
-        const client = obtenerClienteDB();
-        if (client) {
-          await client
-            .from("reportes_diarios")
-            .update({ sincronizado_sheets: true })
-            .eq("nodo", parseInt(datosReporte.nodo, 10))
-            .eq("fecha", datosReporte.fecha);
-        }
+        await marcarReporteSincronizadoDB(datosReporte.nodo, datosReporte.fecha);
       }
     } catch (error) {
       console.error(`[SYNC ERROR] No se pudo sincronizar el reporte a Google Sheets (Nodo: ${datosReporte.nodo}):`, error.message);

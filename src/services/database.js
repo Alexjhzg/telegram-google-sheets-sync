@@ -172,3 +172,39 @@ export async function registrarAuditoriaDB({ chatId, messageId, remitente, accio
     console.warn("[ADVERTENCIA] No se pudo guardar log de auditoría en la Base de Datos:", err.message);
   }
 }
+
+/**
+ * Marca un reporte como sincronizado con Google Sheets en la Base de Datos (sincronizado_sheets = true).
+ *
+ * @param {number|string} nodo - Número de nodo.
+ * @param {string} fecha - Fecha en formato DD/MM/YYYY o YYYY-MM-DD.
+ */
+export async function marcarReporteSincronizadoDB(nodo, fecha) {
+  const client = obtenerClienteDB();
+  if (!client) return;
+
+  let fechaISO = fecha;
+  if (fecha && fecha.includes("/")) {
+    const partes = fecha.split("/");
+    if (partes.length === 3) {
+      fechaISO = `${partes[2]}-${partes[1].padStart(2, "0")}-${partes[0].padStart(2, "0")}`;
+    }
+  }
+
+  try {
+    const { error } = await client
+      .from("reportes_diarios")
+      .update({ sincronizado_sheets: true })
+      .eq("nodo", parseInt(nodo, 10))
+      .eq("fecha", fechaISO);
+
+    if (error) {
+      console.warn("[ADVERTENCIA] No se pudo marcar reporte como sincronizado en Base de Datos:", error.message);
+    } else {
+      console.log(`[INFO] Reporte marcado como sincronizado_sheets = true en BD (Nodo: ${nodo}, Fecha: ${fechaISO}).`);
+    }
+  } catch (err) {
+    console.warn("[ADVERTENCIA] Error al actualizar sincronizado_sheets en Base de Datos:", err.message);
+  }
+}
+
