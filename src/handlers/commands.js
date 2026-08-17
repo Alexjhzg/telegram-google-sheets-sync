@@ -10,6 +10,7 @@ import { obtenerNombreRemitente, esUsuarioAdmin } from "../utils/telegram.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "../services/sheets.js";
 import { generarReporteRealTime } from "../services/reporting.js";
 import { obtenerBloqueYHoraActivo } from "../utils/parser.js";
+import { sincronizarCatalogoDesdeSheets } from "../services/catalogService.js";
 
 /**
  * Registra todos los comandos administrativos del bot.
@@ -185,4 +186,32 @@ export function registrarComandos(bot) {
       await ctx.reply("❌ Ocurrió un error al diagnosticar el sistema.");
     }
   });
+
+  // /sync_nodos o /actualizar_catalogo — Forzar sincronización manual del catálogo desde Sheets a SQL
+  const handlerSync = async (ctx) => {
+    try {
+      const remitente = obtenerNombreRemitente(ctx);
+      console.log(`[INFO] Comando de sincronización de catálogo ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+
+      const isAdmin = await esUsuarioAdmin(ctx);
+      if (!isAdmin) {
+        await ctx.reply("⛔ No tienes permisos autorizados para sincronizar el catálogo.");
+        return;
+      }
+
+      await ctx.reply("🔄 Sincronizando catálogo de nodos desde Google Sheets hacia la base de datos SQL...");
+      const res = await sincronizarCatalogoDesdeSheets();
+
+      if (res.exitoso) {
+        await ctx.reply(`✅ *Catálogo sincronizado exitosamente*\n\nSe procesaron y actualizaron \`${res.sincronizados}\` nodos en la base de datos SQL.`, { parse_mode: "Markdown" });
+      } else {
+        await ctx.reply(`⚠️ *Fallo en la sincronización del catálogo*\n\nRazón: \`${res.error || res.razon || "Desconocida"}\``, { parse_mode: "Markdown" });
+      }
+    } catch (error) {
+      console.error("[ERROR] Falló al ejecutar la sincronización manual del catálogo:", error);
+      await ctx.reply("❌ Ocurrió un error inesperado al sincronizar el catálogo.");
+    }
+  };
+
+  bot.command("actualizar", handlerSync);
 }

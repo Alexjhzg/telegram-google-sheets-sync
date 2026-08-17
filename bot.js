@@ -16,6 +16,7 @@ import {
   inicializarHojaConNodos,
   ordenarYLimpiarHojaPrincipal
 } from "./src/services/sheets.business.js";
+import { sincronizarCatalogoDesdeSheets } from "./src/services/catalogService.js";
 
 // ── Instanciar el bot ───────────────────────────────────────────
 const bot = new Bot(config.telegram.token);
@@ -61,8 +62,11 @@ bot.start({
       await inicializarHojaConNodos(doc);
       await resetearFilasDeDiasAnteriores(doc);
       await ordenarYLimpiarHojaPrincipal(doc);
+
+      // Sincronizar catálogo de nodos de Google Sheets a PostgreSQL al inicio
+      await sincronizarCatalogoDesdeSheets();
     } catch (err) {
-      console.error("[ERROR] Fallo al inicializar, limpiar y ordenar la hoja de cálculo:", err);
+      console.error("[ERROR] Fallo al inicializar, limpiar y ordenar la hoja de cálculo o sincronizar catálogo:", err);
     }
 
     // Iniciar tareas en segundo plano (acceso a la API de Telegram vía bot.api)

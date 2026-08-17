@@ -13,6 +13,7 @@ import {
 import { ordenarYLimpiarHojaPrincipal } from "../services/sheets.business.js";
 import { enviarReporteDiario } from "../services/reporting.js";
 import { enviarAvisoCierre, enviarAvisoNodosFaltantes } from "../services/notifications.js";
+import { sincronizarCatalogoDesdeSheets } from "../services/catalogService.js";
 
 
 /**
@@ -203,6 +204,13 @@ export function programarLimpieza(api) {
         console.error("[ERROR] Fallo al guardar el historial diario:", err);
       }
     });
+  });
+
+  // 9. Sincronización periódica del catálogo de nodos (Sheets -> SQL) cada 15 minutos
+  new Cron("*/15 * * * *", { timezone: "America/Caracas" }, async () => {
+    if (esHorarioLaboral()) {
+      await sincronizarCatalogoDesdeSheets();
+    }
   });
 
   // ── Logs informativos sobre los próximos disparos ────────────────────────

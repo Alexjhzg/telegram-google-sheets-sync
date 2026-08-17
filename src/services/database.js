@@ -208,3 +208,42 @@ export async function marcarReporteSincronizadoDB(nodo, fecha) {
   }
 }
 
+/**
+ * Guarda o actualiza un lote de nodos del catálogo en la Base de Datos relacional.
+ *
+ * @param {Array<{ municipio: string, municipioNormalizado: string, nodo: number, limiteVerificadores: number }>} nodos
+ * @returns {Promise<{ guardados: number }>}
+ */
+export async function upsertCatalogoNodosDB(nodos) {
+  const client = obtenerClienteDB();
+  if (!client) {
+    throw new Error("La base de datos relacional no está configurada");
+  }
+
+  if (!Array.isArray(nodos) || nodos.length === 0) {
+    return { guardados: 0 };
+  }
+
+  const payload = nodos.map((n) => ({
+    municipio: n.municipio,
+    municipio_normalizado: n.municipioNormalizado,
+    nodo: parseInt(n.nodo, 10),
+    limite_verificadores: parseInt(n.limiteVerificadores, 10),
+  }));
+
+  const { data, error } = await client
+    .from("nodos_catalogo")
+    .upsert(payload, { onConflict: "municipio_normalizado,nodo" })
+    .select();
+
+  if (error) {
+    console.error("[ERROR] Falló upsert de catálogo de nodos en Base de Datos:", error.message);
+    throw error;
+  }
+
+  const cantidad = data?.length || nodos.length;
+  console.log(`[INFO] ${cantidad} nodo(s) sincronizado(s)/actualizado(s) exitosamente en la Base de Datos.`);
+  return { guardados: cantidad };
+}
+
+
