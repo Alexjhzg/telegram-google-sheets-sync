@@ -1,6 +1,5 @@
-"use strict";
-
 import { Cron } from "croner";
+import { Api } from "grammy";
 import { config } from "../config/index.js";
 import {
   obtenerHojaDeCalculo,
@@ -15,33 +14,11 @@ import { enviarReporteDiario } from "../services/reporting.js";
 import { enviarAvisoCierre, enviarAvisoNodosFaltantes } from "../services/notifications.js";
 import { sincronizarCatalogoDesdeSheets } from "../services/catalogService.js";
 
-
-/**
- * Verifica de manera segura si un mensaje existe.
- * NOTA: La API de Telegram NO permite a los bots editar ni consultar directamente
- * el estado de mensajes enviados por usuarios en grupos. Para evitar falsos positivos
- * que borren datos válidos de Google Sheets, asumimos que los mensajes válidos existen
- * a menos que el usuario edite explícitamente su mensaje a "eliminar" o esté en estado de revisión expirada.
- *
- * @param {import("grammy").Api} api - API de Telegram.
- * @param {number} chatId
- * @param {number} messageId
- * @returns {Promise<boolean>}
- */
-async function mensajeExiste(api, chatId, messageId) {
-  // Para evitar que errores de API borren datos aprobados en Google Sheets,
-  // asumimos por defecto que el mensaje existe. La eliminación manual está garantizada
-  // por el handler de mensajes editados en message.js (REGEX_ELIMINAR).
+async function mensajeExiste(api: Api, chatId: number, messageId: number): Promise<boolean> {
   return true;
 }
 
-/**
- * Verifica si la hora actual en la zona horaria configurada (America/Caracas)
- * se encuentra dentro del horario laboral activo (07:00 AM a 06:30 PM).
- *
- * @returns {boolean} `true` si se encuentra en horario laboral, `false` en caso contrario.
- */
-export function esHorarioLaboral() {
+export function esHorarioLaboral(): boolean {
   const tz = config.app.timezone || "America/Caracas";
   const now = new Date();
 
@@ -68,16 +45,7 @@ export function esHorarioLaboral() {
   return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
 }
 
-/**
- * Recorre las filas de Google Sheets que tengan un ID de mensaje registrado
- * y resetea aquellas cuyo mensaje ya no exista en Telegram o lleven más de
- * 5 minutos en estado de revisión.
- *
- * @param {import("grammy").Api} api - API de Telegram para verificar mensajes.
- * @param {number} limiteFilas - Límite de filas más recientes a analizar.
- * @param {boolean} force - Si es `true`, omite la verificación de horario laboral.
- */
-export async function ejecutarLimpieza(api, limiteFilas = 15, force = false) {
+export async function ejecutarLimpieza(api: Api, limiteFilas: number = 15, force: boolean = false): Promise<void> {
   if (!force && !esHorarioLaboral()) {
     console.log("[INFO] Limpieza periódica en pausa (fuera del horario laboral 07:00 - 18:30 VET).");
     return;
@@ -88,13 +56,12 @@ export async function ejecutarLimpieza(api, limiteFilas = 15, force = false) {
     try {
       const doc   = await obtenerHojaDeCalculo();
       const hoja  = doc.sheetsByTitle["registros_telegram"];
+      if (!hoja) return;
       const filas = await hoja.getRows();
 
       let eliminados = 0;
       let analizados = 0;
 
-      // Iteramos en orden inverso para que los índices de Google Sheets no se desplacen
-      // cuando eliminamos una fila intermedia.
       for (let i = filas.length - 1; i >= 0; i--) {
         const fila      = filas[i];
         const obj       = fila.toObject();
@@ -109,11 +76,10 @@ export async function ejecutarLimpieza(api, limiteFilas = 15, force = false) {
           break;
         }
 
-        // Comprobar si la fila lleva más de 5 minutos en estado de revisión
         const estado = obj[COLUMNAS.ESTADO] || "";
         let debeBorrarse = false;
 
-        if (estado.startsWith("Revisión desde:")) {
+        if (typeof estado === "string" && estado.startsWith("Revisión desde:")) {
           const timestampRevision = new Date(estado.replace("Revisión desde:", "").trim()).getTime();
           if (!isNaN(timestampRevision)) {
             const transcurridoMins = (Date.now() - timestampRevision) / 1000 / 60;
@@ -134,7 +100,6 @@ export async function ejecutarLimpieza(api, limiteFilas = 15, force = false) {
           eliminados++;
         }
 
-        // Respetar los límites de velocidad de la API de Telegram
         await new Promise((r) => setTimeout(r, config.app.cleanupRequestDelayMs));
       }
 
@@ -149,24 +114,13 @@ export async function ejecutarLimpieza(api, limiteFilas = 15, force = false) {
   });
 }
 
-/**
- * Registra y activa todos los cron jobs del sistema.
- * Responsabilidad única: planificación temporal de tareas.
- *
- * @param {import("grammy").Api} api
- */
-export function programarLimpieza(api) {
-  // 1. Limpieza inicial al arrancar el bot (forzada para garantizar consistencia al encender)
+export function programarLimpieza(api: Api): void {
   setTimeout(() => ejecutarLimpieza(api, 60, true), config.app.cleanupInitialDelayMs);
 
-  // 2. Limpieza periódica continua (cada 5 minutos, respetando horario laboral)
   new Cron("*/5 * * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 60));
 
-
-  // 3. Limpieza de precisión en las horas de corte (9am, 2pm, 6pm)
   const jobCortes = new Cron("0 9,14,18 * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 60));
 
-  // 4. Reseteo diario a la medianoche + ordenamiento y saneamiento de la hoja
   new Cron("0 0 * * *", { timezone: "America/Caracas" }, async () => {
     await sheetsMutex.runExclusive(async () => {
       console.log("[INFO] Iniciando reseteo diario de medianoche...");
@@ -180,20 +134,16 @@ export function programarLimpieza(api) {
     });
   });
 
-  // 5. Reportes consolidados de porcentajes por cortes
   const jobReporte9am = new Cron("5 9 * * *",  { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 1));
-  const jobReporte2pm = new Cron("5 14 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 2));
-  const jobReporte6pm = new Cron("5 18 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 3));
+  new Cron("5 14 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 2));
+  new Cron("5 18 * * *", { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 3));
 
-  // 6. Avisos de cierre de bloque
   new Cron("0 9 * * *",  { timezone: "America/Caracas" }, () => enviarAvisoCierre(api, 1));
   new Cron("0 14 * * *", { timezone: "America/Caracas" }, () => enviarAvisoCierre(api, 2));
   new Cron("0 18 * * *", { timezone: "America/Caracas" }, () => enviarAvisoCierre(api, 3));
 
-  // 7. Alerta de nodos sin reporte a las 6:06 PM
   new Cron("6 18 * * *", { timezone: "America/Caracas" }, () => enviarAvisoNodosFaltantes(api));
 
-  // 8. Resguardo histórico diario a las 11:00 PM
   const jobHistorico = new Cron("0 23 * * *", { timezone: "America/Caracas" }, async () => {
     await sheetsMutex.runExclusive(async () => {
       console.log("[INFO] Iniciando resguardo de historial diario a las 11:00 PM VET...");
@@ -206,18 +156,25 @@ export function programarLimpieza(api) {
     });
   });
 
-  // 9. Sincronización periódica del catálogo de nodos (Sheets -> SQL) cada 15 minutos
   new Cron("*/15 * * * *", { timezone: "America/Caracas" }, async () => {
     if (esHorarioLaboral()) {
       await sincronizarCatalogoDesdeSheets();
     }
   });
 
-  // ── Logs informativos sobre los próximos disparos ────────────────────────
-  const fmtTime = { timeZone: "America/Caracas", hour: "2-digit", minute: "2-digit" };
-  const fmtFull = { timeZone: "America/Caracas", weekday: "long", hour: "2-digit", minute: "2-digit" };
+  const fmtTime: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", hour: "2-digit", minute: "2-digit" };
+  const fmtFull: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", weekday: "long", hour: "2-digit", minute: "2-digit" };
 
-  console.log(`[INFO] Limpieza horaria activa. Siguiente corte a las ${jobCortes.nextRun().toLocaleTimeString("es-VE", fmtTime)} (VET).`);
-  console.log(`[INFO] Reportes diarios a Gerencia activos (9:05am, 2:05pm, 6:05pm VET). Siguiente envío el ${jobReporte9am.nextRun().toLocaleDateString("es-VE", fmtFull)} (VET).`);
-  console.log(`[INFO] Historial diario activo. Siguiente guardado el ${jobHistorico.nextRun().toLocaleDateString("es-VE", fmtFull)} (VET).`);
+  const nextCortes = jobCortes.nextRun();
+  if (nextCortes) {
+    console.log(`[INFO] Limpieza horaria activa. Siguiente corte a las ${nextCortes.toLocaleTimeString("es-VE", fmtTime)} (VET).`);
+  }
+  const nextReporte = jobReporte9am.nextRun();
+  if (nextReporte) {
+    console.log(`[INFO] Reportes diarios a Gerencia activos (9:05am, 2:05pm, 6:05pm VET). Siguiente envío el ${nextReporte.toLocaleDateString("es-VE", fmtFull)} (VET).`);
+  }
+  const nextHist = jobHistorico.nextRun();
+  if (nextHist) {
+    console.log(`[INFO] Historial diario activo. Siguiente guardado el ${nextHist.toLocaleDateString("es-VE", fmtFull)} (VET).`);
+  }
 }

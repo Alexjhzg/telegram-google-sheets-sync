@@ -1,5 +1,4 @@
-"use strict";
-
+import { GoogleSpreadsheet } from "google-spreadsheet";
 import { config } from "../config/index.js";
 import { convertirTimestamp, obtenerBloqueYHoraActivo } from "../utils/parser.js";
 import { validarMunicipioNodo } from "./validation.js";
@@ -21,18 +20,17 @@ import {
   registrarAuditoriaDB,
   marcarReporteSincronizadoDB,
 } from "./database.js";
-import { sincronizarReporteAGoogleSheets } from "./syncService.js";
+
+import { DatosReporteProcesar, ResultadoProcesamiento, ValidacionResultado } from "../types/index.js";
 
 /**
  * Resetea en Google Sheets el registro correspondiente a un ID de mensaje.
- *
- * @param {number|string} messageId - ID del mensaje a buscar y eliminar.
- * @returns {Promise<boolean>} True si se encontró y reseteó la fila, false en caso contrario.
  */
-export async function eliminarReporte(messageId) {
+export async function eliminarReporte(messageId: number | string): Promise<boolean> {
   return sheetsMutex.runExclusive(async () => {
     const doc  = await obtenerHojaDeCalculo();
     const hoja = doc.sheetsByTitle["registros_telegram"];
+    if (!hoja) return false;
     const fila = buscarFilaPorMensaje(await hoja.getRows(), messageId);
 
     if (fila) {
@@ -45,16 +43,16 @@ export async function eliminarReporte(messageId) {
 
 /**
  * Lógica interna para marcar una fila en revisión sin adquirir el lock.
- * Se utiliza internamente por funciones que ya están ejecutándose dentro del lock.
  */
-async function _marcarFilaParaRevision(doc, messageId) {
+async function _marcarFilaParaRevision(doc: GoogleSpreadsheet | null, messageId: number | string): Promise<void> {
   try {
     const documento = doc || await obtenerHojaDeCalculo();
     const hoja = documento.sheetsByTitle["registros_telegram"];
+    if (!hoja) return;
     const filas = await hoja.getRows();
     const fila = buscarFilaPorMensaje(filas, messageId);
     if (fila) {
-      const estadoActual = fila.get(COLUMNAS.ESTADO) || "";
+      const estadoActual = (fila.get(COLUMNAS.ESTADO) || "").toString();
       if (!estadoActual.startsWith("Revisión desde:")) {
         const ahoraIso = new Date().toISOString();
         fila.set(COLUMNAS.ESTADO, `Revisión desde: ${ahoraIso}`);
@@ -69,26 +67,15 @@ async function _marcarFilaParaRevision(doc, messageId) {
 
 /**
  * Marca una fila en Google Sheets en estado de revisión si el reporte editado es inválido.
- *
- * @param {object} [doc] - Instancia de GoogleSpreadsheet ya cargada (opcional).
- * @param {number|string} messageId - ID del mensaje.
  */
-export async function marcarFilaParaRevision(doc, messageId) {
+export async function marcarFilaParaRevision(doc: GoogleSpreadsheet | null, messageId: number | string): Promise<void> {
   return sheetsMutex.runExclusive(async () => {
     await _marcarFilaParaRevision(doc, messageId);
   });
 }
 
 /**
- * Procesa la lógica de negocio de un reporte:
- * 1. Calcula las horas y holguras del mensaje (creación vs edición).
- * 2. Valida municipio y nodo contra la base de datos oficial.
- * 3. Carga el historial del mismo día en la hoja principal.
- * 4. Calcula la acumulación por bloques y valida el límite oficial.
- * 5. Guarda o actualiza el registro en Supabase (si está activo) y Google Sheets.
- *
- * @param {object} params
- * @returns {Promise<object>} Resultado estructurado del procesamiento.
+ * Procesa la lógica de negocio de un reporte.
  */
 export async function procesarYGuardarReporte({
   reporte,
@@ -99,13 +86,12 @@ export async function procesarYGuardarReporte({
   creationTimestamp,
   editTimestamp,
   esEdicion,
-}) {
+}: DatosReporteProcesar): Promise<ResultadoProcesamiento> {
   const { municipio, nodo, totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
 
   let timestamp = creationTimestamp;
   let tiempoFinal = tiempo;
 
-  // Evaluar holgura para la clasificación por bloques de mensajes editados
   if (esEdicion && editTimestamp) {
     const diffMins = (editTimestamp - creationTimestamp) / 60;
     const holgura = config.app.reportEditGracePeriodMins;
@@ -121,25 +107,22 @@ export async function procesarYGuardarReporte({
 
   const { fecha, hora } = tiempoFinal;
 
-  // 1. Obtener la hora y bloque activo en hora de Venezuela
   const { horaStr, bloqueActivo, bloqueStr } = obtenerBloqueYHoraActivo(timestamp);
   console.log(`[INFO] Mensaje procesado a las ${horaStr} (Hora VE). Bloque Activo: ${bloqueStr}.`);
 
   const doc = await obtenerHojaDeCalculo();
 
-  // 2. Validar Municipio y Nodo contra catálogo oficial (Base de Datos o Google Sheets)
-  let validacion;
+  let validacion: ValidacionResultado;
   if (esDBActiva()) {
     try {
       validacion = await validarMunicipioNodoDB(municipio, nodo);
       if (!validacion.valido) {
-        // Si la tabla de la BD aún no tiene poblado este nodo, validar por resguardo en Google Sheets
         const valSheets = await validarMunicipioNodo(doc, municipio, nodo);
         if (valSheets.valido) {
           validacion = valSheets;
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("[ADVERTENCIA] Falló validación en Base de Datos, utilizando fallback a Google Sheets:", e.message);
       validacion = await validarMunicipioNodo(doc, municipio, nodo);
     }
@@ -162,14 +145,13 @@ export async function procesarYGuardarReporte({
   }
 
   return sheetsMutex.runExclusive(async () => {
-    // 3. Cargar hoja principal y buscar la fila fija del nodo
     const hoja = doc.sheetsByTitle["registros_telegram"];
+    if (!hoja) throw new Error("No existe la hoja registros_telegram");
     await asegurarColumnas(hoja);
 
     const filas = await hoja.getRows();
     const filaExistente = buscarFilaPorNodo(filas, municipioOficial, nodo);
 
-    // El historial solo es válido si la fila fija corresponde al mismo día.
     const fechaFila = filaExistente ? (filaExistente.get(COLUMNAS.FECHA) || "").trim() : "";
     const filaEsDeHoy = fechaFila === fecha;
 
@@ -184,11 +166,9 @@ export async function procesarYGuardarReporte({
       console.log(`[INFO] La fila fija del nodo ${nodo} tiene datos del día anterior (${fechaFila}). Historial reseteado a cero para hoy.`);
     }
 
-    // 4. Calcular la acumulación de verificadores
     const { b1Final, b2Final, b3Final } = calcularAcumulacion(bloqueActivo, reporte, historial);
     const totalFinal = b1Final + b2Final + b3Final;
 
-    // 5. Validar capacidad máxima
     if (totalFinal > limiteVerificadores) {
       if (esEdicion) {
         await _marcarFilaParaRevision(doc, messageId);
@@ -205,7 +185,6 @@ export async function procesarYGuardarReporte({
       };
     }
 
-    // Log estético del proceso
     console.log(
       `\n┌── 📊 LOG DE DATOS & LÓGICA DE GUARDADO ────────────────┐` +
       `\n│ 📥 DATOS PARSEADOS DESDE EL MENSAJE:` +
@@ -249,7 +228,6 @@ export async function procesarYGuardarReporte({
       chatId,
     };
 
-    // 6. Guardar en Base de Datos si está habilitada
     if (esDBActiva()) {
       try {
         await guardarOActualizarReporteDB(datosFinales);
@@ -260,12 +238,11 @@ export async function procesarYGuardarReporte({
           accion: esEdicion ? "EDICION" : "CREACION",
           detalles: datosFinales,
         });
-      } catch (errDb) {
+      } catch (errDb: any) {
         console.error("[ERROR] Falló guardado en Base de Datos:", errDb.message);
       }
     }
 
-    // 7. Sincronizar / guardar en Google Sheets
     const datosHoja = {
       [COLUMNAS.MUNICIPIO]:           municipioOficial,
       [COLUMNAS.NODO]:                nodo,
@@ -290,7 +267,6 @@ export async function procesarYGuardarReporte({
       console.log(`[INFO] Fila nueva creada en Google Sheets como fallback (Mensaje ID: ${messageId}).`);
     }
 
-    // 8. Marcar en la Base de Datos que la sincronización con Sheets se completó con éxito
     if (esDBActiva()) {
       await marcarReporteSincronizadoDB(nodo, fecha);
     }

@@ -1,8 +1,5 @@
-"use strict";
-
 import "dotenv/config";
 
-// ── Validación temprana de variables de entorno obligatorias ────
 const REQUIRED_VARS = [
   "TELEGRAM_BOT_TOKEN",
   "GOOGLE_SPREADSHEET_ID",
@@ -17,10 +14,9 @@ for (const key of REQUIRED_VARS) {
   }
 }
 
-// ── Configuración exportada ─────────────────────────────────────
 export const config = {
   telegram: {
-    token: process.env.TELEGRAM_BOT_TOKEN,
+    token: process.env.TELEGRAM_BOT_TOKEN!,
     managerChatId: process.env.TELEGRAM_MANAGER_CHAT_ID || null,
     managerChatIds: process.env.TELEGRAM_MANAGER_CHAT_ID
       ? process.env.TELEGRAM_MANAGER_CHAT_ID.split(",").map((id) => id.trim()).filter(Boolean)
@@ -28,10 +24,9 @@ export const config = {
   },
 
   google: {
-    spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID,
-    serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    // El .env puede guardar la clave con literales \n — los normalizamos aquí
-    privateKey: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID!,
+    serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+    privateKey: (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
   },
 
   db: {
@@ -44,24 +39,15 @@ export const config = {
   },
 
   app: {
-    // Zona horaria de Venezuela
     timezone: "America/Caracas",
-    // Palabra clave que identifica un mensaje de reporte en el chat
     reportKeyword: "Formato de reporte",
-    // Horas de corte de reporte en hora local Venezuela (9am, 2pm, 6pm)
     cutoffHours: [9, 14, 18],
-    // Tiempo de holgura en minutos para poder corregir un reporte en el mismo bloque
-    reportEditGracePeriodMins: parseInt(process.env.REPORT_EDIT_GRACE_PERIOD_MINS, 10) || 10,
-    // Intervalo de limpieza periódica en milisegundos (5 minutos)
+    reportEditGracePeriodMins: parseInt(process.env.REPORT_EDIT_GRACE_PERIOD_MINS || "10", 10) || 10,
     cleanupIntervalMs: 5 * 60 * 1000,
-    // Retardo inicial antes de la primera limpieza al arrancar (segundos)
     cleanupInitialDelayMs: 10_000,
-    // Retardo entre verificaciones individuales de mensajes en la limpieza (ms)
     cleanupRequestDelayMs: 500,
-    // Horario laboral activo para monitoreo y limpieza periódica (07:00 AM - 06:30 PM VET)
     workStartHour: 7,
     workEndHour: 18,
     workEndMinute: 30,
   },
 };
-

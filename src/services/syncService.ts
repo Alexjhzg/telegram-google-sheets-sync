@@ -1,5 +1,3 @@
-"use strict";
-
 import {
   obtenerHojaDeCalculo,
   asegurarColumnas,
@@ -11,17 +9,15 @@ import { esDBActiva, marcarReporteSincronizadoDB } from "./database.js";
 
 /**
  * Sincroniza un reporte específico hacia Google Sheets.
- * Esta función se ejecuta de forma asíncrona (background) para no bloquear la respuesta en Telegram.
- *
- * @param {object} datosReporte
  */
-export async function sincronizarReporteAGoogleSheets(datosReporte) {
+export async function sincronizarReporteAGoogleSheets(datosReporte: any): Promise<void> {
   return sheetsMutex.runExclusive(async () => {
     try {
       console.log(`[SYNC] Sincronizando reporte de Nodo ${datosReporte.nodo} (${datosReporte.fecha}) a Google Sheets...`);
       
       const doc = await obtenerHojaDeCalculo();
       const hoja = doc.sheetsByTitle["registros_telegram"];
+      if (!hoja) return;
       await asegurarColumnas(hoja);
 
       const filas = await hoja.getRows();
@@ -51,11 +47,10 @@ export async function sincronizarReporteAGoogleSheets(datosReporte) {
         console.log(`[SYNC] Fila nueva en Google Sheets agregada exitosamente (Nodo: ${datosReporte.nodo}).`);
       }
 
-      // Marcar como sincronizado en la Base de Datos si está activa
       if (esDBActiva()) {
         await marcarReporteSincronizadoDB(datosReporte.nodo, datosReporte.fecha);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[SYNC ERROR] No se pudo sincronizar el reporte a Google Sheets (Nodo: ${datosReporte.nodo}):`, error.message);
     }
   });

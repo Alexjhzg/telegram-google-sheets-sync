@@ -1,19 +1,11 @@
-"use strict";
-
+import { Api } from "grammy";
+import { GoogleSpreadsheetRow } from "google-spreadsheet";
 import { config } from "../config/index.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "./sheets.js";
 
-/** ID de Chat de respaldo cuando no hay registros en Sheets aún. */
 const FALLBACK_CHAT_ID = -1003785032543;
 
-/**
- * Resuelve el Chat ID de destino: primero intenta leer la variable de entorno,
- * luego busca entre las filas ya cargadas y finalmente usa el fallback hardcodeado.
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheetRow[]} [filasCargadas] - Filas ya obtenidas de la hoja.
- * @returns {number|string}
- */
-function resolverChatId(filasCargadas = []) {
+function resolverChatId(filasCargadas: GoogleSpreadsheetRow[] = []): number | string {
   if (process.env.TELEGRAM_REPORT_CHAT_ID) {
     return process.env.TELEGRAM_REPORT_CHAT_ID;
   }
@@ -26,16 +18,10 @@ function resolverChatId(filasCargadas = []) {
   return FALLBACK_CHAT_ID;
 }
 
-/**
- * Envía el aviso de cierre de bloque horario al canal/grupo.
- *
- * @param {import("grammy").Api} api - API del bot de Telegram.
- * @param {number} corte - El corte: 1 para 9:00 am, 2 para 2:00 pm, 3 para 6:00 pm.
- */
-export async function enviarAvisoCierre(api, corte) {
+export async function enviarAvisoCierre(api: Api, corte: number): Promise<void> {
   console.log(`[INFO] Iniciando envío de aviso de cierre para el corte ${corte}...`);
   try {
-    const MENSAJES_CIERRE = {
+    const MENSAJES_CIERRE: Record<number, string> = {
       1: `🔴 *Corte de las 9:00 am CERRADO*\n` +
          `🟢 *Bloque de las 2:00 pm ACTIVO*\n\n` +
          `Cualquier dato recibido de ahora en adelante se debe asignar al bloque de las 2pm y 6pm.`,
@@ -52,10 +38,11 @@ export async function enviarAvisoCierre(api, corte) {
       return;
     }
 
-    let chatId;
+    let chatId: number | string;
     try {
       const doc = await obtenerHojaDeCalculo();
-      const rowsPrincipal = await doc.sheetsByTitle["registros_telegram"].getRows();
+      const hoja = doc.sheetsByTitle["registros_telegram"];
+      const rowsPrincipal = hoja ? await hoja.getRows() : [];
       chatId = resolverChatId(rowsPrincipal);
     } catch (e) {
       console.error("[ERROR] No se pudo obtener Chat ID de la hoja para aviso de cierre:", e);
@@ -70,14 +57,7 @@ export async function enviarAvisoCierre(api, corte) {
   }
 }
 
-/**
- * Escanea la base de datos de Sheets, persiste el registro de incidencias en la hoja
- * 'nodos_sin_reportes' y envía una alerta grupal listando todos los nodos que
- * finalizaron la jornada con 0 verificadores reportados.
- *
- * @param {import("grammy").Api} api - API del bot de Telegram.
- */
-export async function enviarAvisoNodosFaltantes(api) {
+export async function enviarAvisoNodosFaltantes(api: Api): Promise<void> {
   console.log("[INFO] Iniciando generación de aviso de nodos sin reporte...");
   try {
     const doc = await obtenerHojaDeCalculo();
@@ -89,8 +69,7 @@ export async function enviarAvisoNodosFaltantes(api) {
 
     const filas = await sheet.getRows();
 
-    // Agrupar los nodos con totalVerificadores === 0 por municipio
-    const faltantesPorMunicipio = {};
+    const faltantesPorMunicipio: Record<string, string[]> = {};
     let totalFaltantes = 0;
 
     for (const fila of filas) {
@@ -100,7 +79,6 @@ export async function enviarAvisoNodosFaltantes(api) {
       const idMensaje = (fila.get(COLUMNAS.ID_MENSAJE) || "").trim();
       const fecha = (fila.get(COLUMNAS.FECHA) || "").trim();
 
-      // Se considera nodo faltante si tiene 0 verificadores Y además no tiene ningún reporte registrado (sin ID de mensaje y sin fecha)
       if (municipio && nodo && totalVerificadores === 0 && !idMensaje && !fecha) {
         if (!faltantesPorMunicipio[municipio]) {
           faltantesPorMunicipio[municipio] = [];
@@ -110,13 +88,11 @@ export async function enviarAvisoNodosFaltantes(api) {
       }
     }
 
-    // Si todos los nodos reportaron, no mandamos nada
     if (totalFaltantes === 0) {
       console.log("[INFO] Todos los nodos han reportado hoy. No se envía aviso de faltantes.");
       return;
     }
 
-    // 1. Persistir el registro histórico de incidencias en Google Sheets
     console.log("[INFO] Guardando registro de incidencias en 'nodos_sin_reportes'...");
     try {
       let sheetSinReportes = doc.sheetsByTitle["nodos_sin_reportes"];
@@ -132,17 +108,16 @@ export async function enviarAvisoNodosFaltantes(api) {
         await sheetSinReportes.setHeaderRow(["Fecha", "Municipio", "Nodo"]);
       }
 
-      const opts = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
+      const opts: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
       const hoyStr = new Date().toLocaleDateString("es-VE", opts);
 
-      // Verificar si ya existen registros del día de hoy en nodos_sin_reportes
       const filasExistentes = await sheetSinReportes.getRows();
       const yaExiste = filasExistentes.some(f => (f.get("Fecha") || "").trim() === hoyStr);
 
       if (yaExiste) {
         console.log(`[INFO] Los registros de nodos sin reporte para el día ${hoyStr} ya están guardados. Omitiendo duplicados.`);
       } else {
-        const filasNuevas = [];
+        const filasNuevas: Array<Record<string, string>> = [];
         for (const municipio of Object.keys(faltantesPorMunicipio)) {
           for (const nodo of faltantesPorMunicipio[municipio]) {
             filasNuevas.push({ "Fecha": hoyStr, "Municipio": municipio, "Nodo": String(nodo) });
@@ -158,7 +133,6 @@ export async function enviarAvisoNodosFaltantes(api) {
       console.error("[ERROR] Falló el guardado histórico en la hoja 'nodos_sin_reportes':", errSheet);
     }
 
-    // 2. Construir y enviar el mensaje de alerta a Telegram
     let mensaje = "⚠️ *NODOS SIN REPORTE REGISTRADO HOY*\n\n" +
                   "Municipios y sus respectivos nodos sin actividad:\n\n";
 
@@ -170,13 +144,11 @@ export async function enviarAvisoNodosFaltantes(api) {
     }
     mensaje += "📝 _Estaremos registrando estas incidencias._";
 
-    // Reutilizar las filas ya cargadas para evitar una segunda llamada a la API de Google
     const chatId = resolverChatId(filas);
     console.log(`[INFO] Enviando aviso de nodos faltantes al Chat ID: ${chatId}`);
     await api.sendMessage(chatId, mensaje, { parse_mode: "Markdown" });
     console.log("[INFO] Aviso de nodos faltantes enviado con éxito.");
 
-    // Enviar copia a los privados/gerentes si están configurados
     if (config.telegram.managerChatIds.length > 0) {
       for (const managerId of config.telegram.managerChatIds) {
         console.log(`[INFO] Enviando copia del aviso de nodos faltantes al privado (Chat ID: ${managerId})`);

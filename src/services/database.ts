@@ -1,30 +1,25 @@
-"use strict";
-
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { config } from "../config/index.js";
 import { normalizarTexto } from "./sheets.js";
+import { ValidacionResultado, AuditoriaPayload } from "../types/index.js";
 
-let dbClient = null;
+let dbClient: SupabaseClient | null = null;
 
 /**
  * Retorna la instancia singleton del cliente de Base de Datos relacional si está habilitada en la configuración.
- * @returns {import("@supabase/supabase-js").SupabaseClient | null}
  */
-export function obtenerClienteDB() {
+export function obtenerClienteDB(): SupabaseClient | null {
   if (!config.db.enabled) {
     return null;
   }
 
   if (!dbClient) {
     console.log("[INFO] Inicializando cliente de Base de Datos relacional...");
-    dbClient = createClient(config.db.url, config.db.key, {
+    dbClient = createClient(config.db.url!, config.db.key!, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false,
-      },
-      realtime: {
-        disabled: true,
       },
     });
   }
@@ -34,29 +29,23 @@ export function obtenerClienteDB() {
 
 /**
  * Indica si la Base de Datos relacional está configurada y lista para ser usada.
- * @returns {boolean}
  */
-export function esDBActiva() {
+export function esDBActiva(): boolean {
   return config.db.enabled;
 }
 
 /**
  * Valida un Municipio y Nodo contra el catálogo oficial en la Base de Datos.
- *
- * @param {string} municipio - Nombre del municipio.
- * @param {number} nodo - Número del nodo.
- * @returns {Promise<{ valido: boolean, limiteVerificadores: number, municipioOficial: string, razon?: string }>}
  */
-export async function validarMunicipioNodoDB(municipio, nodo) {
+export async function validarMunicipioNodoDB(municipio: string, nodo: number | string): Promise<ValidacionResultado> {
   const client = obtenerClienteDB();
   if (!client) {
     throw new Error("La base de datos relacional no está configurada");
   }
 
   const munNormalizado = normalizarTexto(municipio);
-  const nodInt = parseInt(nodo, 10);
+  const nodInt = parseInt(String(nodo), 10);
 
-  // 1. Verificar si el municipio existe en el catálogo
   const { data: nodosMunicipio, error: errMun } = await client
     .from("nodos_catalogo")
     .select("*")
@@ -70,7 +59,6 @@ export async function validarMunicipioNodoDB(municipio, nodo) {
   const municipioExiste = nodosMunicipio && nodosMunicipio.length > 0;
   const municipioOficialDetectado = municipioExiste ? nodosMunicipio[0].municipio : municipio;
 
-  // 2. Buscar la combinación exacta de municipio + nodo
   const { data: registroOficial, error: errNodo } = await client
     .from("nodos_catalogo")
     .select("*")
@@ -100,11 +88,8 @@ export async function validarMunicipioNodoDB(municipio, nodo) {
 
 /**
  * Guarda o actualiza (Upsert) un reporte en la tabla 'reportes_diarios' de la Base de Datos.
- *
- * @param {object} datos
- * @returns {Promise<object>} Registro insertado/actualizado.
  */
-export async function guardarOActualizarReporteDB(datos) {
+export async function guardarOActualizarReporteDB(datos: any): Promise<any> {
   const client = obtenerClienteDB();
   if (!client) {
     throw new Error("La base de datos relacional no está configurada");
@@ -112,7 +97,6 @@ export async function guardarOActualizarReporteDB(datos) {
 
   const munNormalizado = normalizarTexto(datos.municipioOficial);
 
-  // Convertir fecha de DD/MM/YYYY a YYYY-MM-DD para la columna DATE de PostgreSQL
   let fechaISO = datos.fecha;
   if (datos.fecha && datos.fecha.includes("/")) {
     const partes = datos.fecha.split("/");
@@ -160,7 +144,7 @@ export async function guardarOActualizarReporteDB(datos) {
 /**
  * Registra una acción en la tabla de auditoría de la Base de Datos.
  */
-export async function registrarAuditoriaDB({ chatId, messageId, remitente, accion, detalles }) {
+export async function registrarAuditoriaDB({ chatId, messageId, remitente, accion, detalles }: AuditoriaPayload): Promise<void> {
   const client = obtenerClienteDB();
   if (!client) return;
 
@@ -172,18 +156,15 @@ export async function registrarAuditoriaDB({ chatId, messageId, remitente, accio
       accion,
       detalles,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.warn("[ADVERTENCIA] No se pudo guardar log de auditoría en la Base de Datos:", err.message);
   }
 }
 
 /**
  * Marca un reporte como sincronizado con Google Sheets en la Base de Datos (sincronizado_sheets = true).
- *
- * @param {number|string} nodo - Número de nodo.
- * @param {string} fecha - Fecha en formato DD/MM/YYYY o YYYY-MM-DD.
  */
-export async function marcarReporteSincronizadoDB(nodo, fecha) {
+export async function marcarReporteSincronizadoDB(nodo: number | string, fecha: string): Promise<void> {
   const client = obtenerClienteDB();
   if (!client) return;
 
@@ -199,7 +180,7 @@ export async function marcarReporteSincronizadoDB(nodo, fecha) {
     const { error } = await client
       .from("reportes_diarios")
       .update({ sincronizado_sheets: true })
-      .eq("nodo", parseInt(nodo, 10))
+      .eq("nodo", parseInt(String(nodo), 10))
       .eq("fecha", fechaISO);
 
     if (error) {
@@ -207,18 +188,15 @@ export async function marcarReporteSincronizadoDB(nodo, fecha) {
     } else {
       console.log(`[INFO] Reporte marcado como sincronizado_sheets = true en BD (Nodo: ${nodo}, Fecha: ${fechaISO}).`);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn("[ADVERTENCIA] Error al actualizar sincronizado_sheets en Base de Datos:", err.message);
   }
 }
 
 /**
  * Guarda o actualiza un lote de nodos del catálogo en la Base de Datos relacional.
- *
- * @param {Array<{ municipio: string, municipioNormalizado: string, nodo: number, limiteVerificadores: number }>} nodos
- * @returns {Promise<{ guardados: number }>}
  */
-export async function upsertCatalogoNodosDB(nodos) {
+export async function upsertCatalogoNodosDB(nodos: Array<{ municipio: string; municipioNormalizado?: string; nodo: number; limiteVerificadores?: number }>): Promise<{ guardados: number }> {
   const client = obtenerClienteDB();
   if (!client) {
     throw new Error("La base de datos relacional no está configurada");
@@ -230,9 +208,9 @@ export async function upsertCatalogoNodosDB(nodos) {
 
   const payload = nodos.map((n) => ({
     municipio: n.municipio,
-    municipio_normalizado: n.municipioNormalizado,
-    nodo: parseInt(n.nodo, 10),
-    limite_verificadores: parseInt(n.limiteVerificadores, 10),
+    municipio_normalizado: n.municipioNormalizado || normalizarTexto(n.municipio),
+    nodo: parseInt(String(n.nodo), 10),
+    limite_verificadores: parseInt(String(n.limiteVerificadores || 0), 10),
   }));
 
   const { data, error } = await client
@@ -249,5 +227,3 @@ export async function upsertCatalogoNodosDB(nodos) {
   console.log(`[INFO] ${cantidad} nodo(s) sincronizado(s)/actualizado(s) exitosamente en la Base de Datos.`);
   return { guardados: cantidad };
 }
-
-

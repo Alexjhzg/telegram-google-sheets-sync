@@ -1,9 +1,4 @@
-"use strict";
-
-// ── Punto de entrada ────────────────────────────────────────────
-// Carga la configuración primero (valida y falla rápido si falta algo)
 import { config } from "./src/config/index.js";
-
 import http from "node:http";
 import { Bot } from "grammy";
 import { registrarHandlers } from "./src/handlers/message.js";
@@ -18,19 +13,15 @@ import {
 } from "./src/services/sheets.business.js";
 import { sincronizarCatalogoDesdeSheets } from "./src/services/catalogService.js";
 
-// ── Instanciar el bot ───────────────────────────────────────────
 const bot = new Bot(config.telegram.token);
 
-// ── Registrar handlers de mensajes ─────────────────────────────
 registrarHandlers(bot);
 
-// ── Manejador global de errores ─────────────────────────────────
 bot.catch((err) => {
   const updateId = err.ctx?.update?.update_id ?? "desconocida";
   console.error(`[ERROR GLOBAL] Error en actualización ${updateId}:`, err.error);
 });
 
-// ── Servidor HTTP para Render (Evita fallos de despliegue y permite pings de vida) ──
 const PORT = process.env.PORT || 8080;
 const server = http.createServer((req, res) => {
   if (req.url === "/" || req.url === "/healthz") {
@@ -46,31 +37,26 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`[INFO] Servidor HTTP escuchando en el puerto ${PORT} (Requerido para despliegues en Render Web Services).`);
 });
 
-// ── Arrancar el bot ─────────────────────────────────────────────
 console.log("[INFO] Iniciando bot de supervisión de campo...");
 bot.start({
   onStart: async (info) => {
     console.log(`[INFO] Bot @${info.username} en línea y escuchando mensajes.`);
 
-    // Inicializar hoja con filas fijas de nodos, limpiar registros de días anteriores y reordenar/sanear la hoja
     try {
       const doc = await obtenerHojaDeCalculo();
       await inicializarHojaConNodos(doc);
       await resetearFilasDeDiasAnteriores(doc);
       await ordenarYLimpiarHojaPrincipal(doc);
 
-      // Sincronizar catálogo de nodos de Google Sheets a PostgreSQL al inicio
       await sincronizarCatalogoDesdeSheets();
     } catch (err) {
       console.error("[ERROR] Fallo al inicializar, limpiar y ordenar la hoja de cálculo o sincronizar catálogo:", err);
     }
 
-    // Iniciar tareas en segundo plano (acceso a la API de Telegram vía bot.api)
     programarLimpieza(bot.api);
   },
 });
-

@@ -1,5 +1,4 @@
-"use strict";
-
+import { Bot, Context } from "grammy";
 import { config } from "../config/index.js";
 import { parsearReporte, convertirTimestamp, obtenerBloqueYHoraActivo } from "../utils/parser.js";
 import { obtenerNombreRemitente, reaccionar } from "../utils/telegram.js";
@@ -10,17 +9,9 @@ import {
   procesarYGuardarReporte,
 } from "../services/reportProcessor.js";
 
-// Regex que detecta si un mensaje contiene una solicitud de eliminación manual
 const REGEX_ELIMINAR = /\b(?:eliminar|borrar|eliminado|borrado)\b/i;
 
-/**
- * Maneja la solicitud de eliminación de un registro desde Telegram.
- * El usuario edita su mensaje a "eliminar" para borrar la fila de Sheets.
- *
- * @param {import("grammy").Context} ctx
- * @param {number} messageId
- */
-async function manejarEliminacion(ctx, messageId) {
+async function manejarEliminacion(ctx: Context, messageId: number): Promise<void> {
   console.log(`[INFO] Solicitud de eliminación detectada — Mensaje ID: ${messageId}`);
   try {
     const reseteado = await eliminarReporte(messageId);
@@ -31,11 +22,10 @@ async function manejarEliminacion(ctx, messageId) {
       console.warn(`[ADVERTENCIA] No se encontró fila con Mensaje ID: ${messageId} para resetear.`);
     }
 
-    // Intentar eliminar también el mensaje en Telegram para mantener limpio el grupo
     try {
       await ctx.deleteMessage();
       console.log(`[INFO] Mensaje de Telegram ID ${messageId} eliminado exitosamente.`);
-    } catch (err) {
+    } catch (err: any) {
       console.warn(`[ADVERTENCIA] No se pudo borrar el mensaje de Telegram ID ${messageId}: ${err.message}`);
     }
   } catch (error) {
@@ -43,19 +33,14 @@ async function manejarEliminacion(ctx, messageId) {
   }
 }
 
-/**
- * Registra el handler principal de mensajes (nuevos y editados) en el bot.
- * @param {import("grammy").Bot} bot
- */
-export function registrarHandlers(bot) {
-  // Registrar comandos administrativos (/reportes, /lista, etc.)
+export function registrarHandlers(bot: Bot): void {
   registrarComandos(bot);
 
   bot.on(["message:text", "edited_message:text"], async (ctx) => {
     const mensajeObj = ctx.message || ctx.editedMessage;
-    if (!mensajeObj) return;
+    if (!mensajeObj || !ctx.chat) return;
 
-    const texto      = mensajeObj.text;
+    const texto      = mensajeObj.text || "";
     const messageId  = mensajeObj.message_id;
     const esEdicion  = !!ctx.editedMessage;
     const remitente  = obtenerNombreRemitente(ctx);
@@ -68,9 +53,8 @@ export function registrarHandlers(bot) {
       `\n=============================\n`
     );
 
-    // ── 0. Verificar si está dentro del horario de la jornada laboral (6:00 AM a 6:00 PM VET) ──
     const creationTimestamp = mensajeObj.date || Math.floor(Date.now() / 1000);
-    const editTimestamp = mensajeObj.edit_date || null;
+    const editTimestamp = (mensajeObj as any).edit_date || null;
     let timestampEfectivo = creationTimestamp;
 
     if (esEdicion && editTimestamp) {
@@ -87,13 +71,11 @@ export function registrarHandlers(bot) {
       return;
     }
 
-    // ── 1. Verificar si es una solicitud de eliminación manual ──
     if (REGEX_ELIMINAR.test(texto)) {
       await manejarEliminacion(ctx, messageId);
       return;
     }
 
-    // ── 2. Filtrar por palabra clave de reporte ─────────────────
     if (!texto.toLowerCase().includes(config.app.reportKeyword.toLowerCase())) {
       if (esEdicion) {
         await marcarFilaParaRevision(null, messageId);
@@ -101,7 +83,6 @@ export function registrarHandlers(bot) {
       return;
     }
 
-    // ── 3. Parsear datos del reporte ────────────────────────────
     const reporte = parsearReporte(texto);
     if (!reporte) {
       console.warn("[ADVERTENCIA] Palabra clave encontrada pero no se pudo parsear el reporte.");
@@ -110,7 +91,6 @@ export function registrarHandlers(bot) {
       }
       await reaccionar(ctx, "👎");
 
-      // Analizar qué campo faltó para enviar la alerta correspondiente
       const tieneMunicipio = /(?:Municipio|municipio)\*?\s*:/i.test(texto);
       const tieneNodo      = /(?:Nodo|nodo)\*?\s*:/i.test(texto);
 
@@ -143,7 +123,7 @@ export function registrarHandlers(bot) {
           await ctx.reply(mensajeError, {
             reply_parameters: { message_id: messageId }
           });
-        } catch (err) {
+        } catch (err: any) {
           console.error("[ERROR] No se pudo enviar el mensaje de alerta de formato:", err.message);
         }
       }
@@ -153,10 +133,9 @@ export function registrarHandlers(bot) {
     const tiempo = convertirTimestamp(mensajeObj.date);
     console.log("[INFO] Reporte parseado:", { ...reporte, ...tiempo, remitente });
 
-    // ── 4. Procesar y persistir el reporte en Sheets ────────────
     try {
       const creationTimestamp = mensajeObj.date || Math.floor(Date.now() / 1000);
-      const editTimestamp = mensajeObj.edit_date || null;
+      const editTimestamp = (mensajeObj as any).edit_date || null;
 
       const resultado = await procesarYGuardarReporte({
         reporte,
@@ -172,7 +151,6 @@ export function registrarHandlers(bot) {
       if (!resultado.valido) {
         await reaccionar(ctx, "👎");
 
-        // Formatear respuesta de error según la razón del fallo
         let mensajeRespuesta = "";
 
         if (resultado.razon === "MUNICIPIO_INCORRECTO") {
@@ -203,18 +181,17 @@ export function registrarHandlers(bot) {
               parse_mode: "Markdown",
               reply_parameters: { message_id: messageId },
             });
-          } catch (err) {
+          } catch (err: any) {
             console.error("[ERROR] No se pudo enviar el mensaje de rechazo:", err.message);
           }
         }
         return;
       }
 
-      // Si todo es válido, reaccionar con aprobación
       await reaccionar(ctx, "👍");
     } catch (error) {
       console.error("[ERROR] Falló la persistencia en Google Sheets:", error);
-      throw error; // Propagado al bot.catch() global
+      throw error;
     }
   });
 }

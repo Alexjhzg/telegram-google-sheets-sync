@@ -1,9 +1,8 @@
-"use strict";
-
-import { GoogleSpreadsheet } from "google-spreadsheet";
+import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet, GoogleSpreadsheetRow } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import { config } from "../config/index.js";
 import { Mutex } from "../utils/mutex.js";
+import { HistorialAcumulado } from "../types/index.js";
 
 // Lock global para secuenciar todas las operaciones asíncronas sobre Google Sheets
 export const sheetsMutex = new Mutex();
@@ -22,17 +21,15 @@ export const COLUMNAS = {
   ID_MENSAJE:         "ID Mensaje",
   ID_CHAT:            "ID Chat",
   ESTADO:             "Estado",
-};
+} as const;
 
-// Variable de módulo para almacenar la promesa de inicialización de la hoja (patrón Singleton)
-let docPromise = null;
+let docPromise: Promise<GoogleSpreadsheet> | null = null;
 
 /**
  * Crea, autentica y carga el cliente de Google Sheets una sola vez,
  * reutilizando la conexión en las llamadas posteriores.
- * @returns {Promise<GoogleSpreadsheet>}
  */
-export async function obtenerHojaDeCalculo() {
+export async function obtenerHojaDeCalculo(): Promise<GoogleSpreadsheet> {
   if (docPromise) {
     return docPromise;
   }
@@ -57,10 +54,8 @@ export async function obtenerHojaDeCalculo() {
 /**
  * Asegura que las columnas de rastreo existen en la hoja.
  * Las añade automáticamente si no están presentes.
- * @param {import("google-spreadsheet").GoogleSpreadsheetWorksheet} hoja
  */
-export async function asegurarColumnas(hoja) {
-  // Cargar las cabeceras explícitamente si aún no están en memoria
+export async function asegurarColumnas(hoja: GoogleSpreadsheetWorksheet): Promise<void> {
   await hoja.loadHeaderRow();
 
   const cabeceras = [...hoja.headerValues];
@@ -79,10 +74,8 @@ export async function asegurarColumnas(hoja) {
 
 /**
  * Normaliza cualquier texto removiendo tildes, diacríticos, mayúsculas y espacios extra.
- * @param {string} txt
- * @returns {string}
  */
-export function normalizarTexto(txt) {
+export function normalizarTexto(txt: string | undefined | null): string {
   return (txt || "")
     .trim()
     .toLowerCase()
@@ -93,11 +86,8 @@ export function normalizarTexto(txt) {
 
 /**
  * Busca en la hoja la fila cuyo ID de mensaje coincida.
- * @param {import("google-spreadsheet").GoogleSpreadsheetRow[]} filas
- * @param {number|string} messageId
- * @returns {import("google-spreadsheet").GoogleSpreadsheetRow | null}
  */
-export function buscarFilaPorMensaje(filas, messageId) {
+export function buscarFilaPorMensaje(filas: GoogleSpreadsheetRow[], messageId: number | string): GoogleSpreadsheetRow | null {
   return filas.find(
     (fila) => String(fila.toObject()[COLUMNAS.ID_MENSAJE]) === String(messageId)
   ) ?? null;
@@ -105,15 +95,10 @@ export function buscarFilaPorMensaje(filas, messageId) {
 
 /**
  * Busca en la hoja la fila fija que corresponde a un municipio+nodo.
- * No filtra por fecha — la fila es permanente.
- * @param {import("google-spreadsheet").GoogleSpreadsheetRow[]} filas
- * @param {string} municipioOficial
- * @param {number} nodo
- * @returns {import("google-spreadsheet").GoogleSpreadsheetRow | null}
  */
-export function buscarFilaPorNodo(filas, municipioOficial, nodo) {
+export function buscarFilaPorNodo(filas: GoogleSpreadsheetRow[], municipioOficial: string, nodo: number | string): GoogleSpreadsheetRow | null {
   const munBuscado = normalizarTexto(municipioOficial);
-  const nodBuscado = parseInt(nodo, 10);
+  const nodBuscado = parseInt(String(nodo), 10);
 
   return filas.find((fila) => {
     const munFila = normalizarTexto(fila.get(COLUMNAS.MUNICIPIO));
@@ -125,9 +110,8 @@ export function buscarFilaPorNodo(filas, municipioOficial, nodo) {
 /**
  * Resetea los datos de reporte de una fila fija (borra bloques, totales,
  * remitente, fecha, hora, ID de mensaje y estado), dejando fijos municipio y nodo.
- * @param {import("google-spreadsheet").GoogleSpreadsheetRow} fila
  */
-export async function resetearFila(fila) {
+export async function resetearFila(fila: GoogleSpreadsheetRow): Promise<void> {
   fila.set(COLUMNAS.TOTAL_VERIFICADORES, "0");
   fila.set(COLUMNAS.BLOQUE_1,            "0");
   fila.set(COLUMNAS.BLOQUE_2,            "0");
@@ -143,20 +127,16 @@ export async function resetearFila(fila) {
 
 /**
  * Resetea todas las filas que tengan una fecha distinta al día de hoy en la zona horaria configurada.
- * De esta manera, solo quedan en la hoja principal los reportes del día actual.
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
- * @returns {Promise<number>} Número de filas reseteadas.
  */
-export async function resetearFilasDeDiasAnteriores(doc) {
+export async function resetearFilasDeDiasAnteriores(doc: GoogleSpreadsheet): Promise<number> {
   const hoja = doc.sheetsByTitle["registros_telegram"];
+  if (!hoja) return 0;
   const filas = await hoja.getRows();
 
-  const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+  const opts: Intl.DateTimeFormatOptions = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
   const hoyStr = new Date().toLocaleDateString("es-VE", opts);
 
-  // 1. Identificar si hay fechas de días anteriores en la hoja principal
-  const fechasAnteriores = new Set();
+  const fechasAnteriores = new Set<string>();
   for (const fila of filas) {
     const fechaFila = (fila.get(COLUMNAS.FECHA) || "").trim();
     if (fechaFila && fechaFila !== hoyStr) {
@@ -164,13 +144,11 @@ export async function resetearFilasDeDiasAnteriores(doc) {
     }
   }
 
-  // 2. Para cada fecha anterior detectada, resguardarla preventivamente en el histórico antes de borrarla
   for (const fechaAnterior of fechasAnteriores) {
     console.log(`[INFO] Detectada fecha de día anterior (${fechaAnterior}) en la hoja principal. Ejecutando resguardo preventivo...`);
     await guardarHistoricoDiario(doc, fechaAnterior);
   }
 
-  // 3. Resetear únicamente las filas que pertenecen a esos días anteriores
   let reseteadas = 0;
   for (const fila of filas) {
     const fechaFila = (fila.get(COLUMNAS.FECHA) || "").trim();
@@ -193,18 +171,14 @@ export async function resetearFilasDeDiasAnteriores(doc) {
 
 /**
  * Guarda todos los registros correspondientes a una fecha específica en la hoja registros_historicos_telegram.
- * Si no se especifica una fecha, busca la primera fecha disponible en las filas (usado para el cron de la noche).
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
- * @param {string|null} fechaEspecifica - Fecha a respaldar (ej: "03/06/2026")
  */
-export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
+export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspecifica: string | null = null): Promise<void> {
   console.log("[INFO] Guardando histórico diario en la hoja 'registros_historicos_telegram'...");
   
   const hojaPrincipal = doc.sheetsByTitle["registros_telegram"];
+  if (!hojaPrincipal) return;
   const filas = await hojaPrincipal.getRows();
 
-  // 1. Identificar la fecha real de los reportes a respaldar
   let fechaReporte = fechaEspecifica;
   if (!fechaReporte) {
     for (const fila of filas) {
@@ -216,7 +190,6 @@ export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
     }
   }
 
-  // Si no hay ninguna fecha que respaldar, salimos
   if (!fechaReporte) {
     console.log("[INFO] No se encontraron reportes con fecha para respaldar. Omitiendo histórico.");
     return;
@@ -230,7 +203,6 @@ export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
     });
   }
 
-  // Asegurar cabeceras
   try {
     await sheetHistorica.loadHeaderRow();
   } catch (err) {
@@ -251,7 +223,6 @@ export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
     ]);
   }
 
-  // 2. Verificar si el histórico de esa fecha ya existe para evitar duplicados
   const filasHistoricas = await sheetHistorica.getRows();
   const yaExiste = filasHistoricas.some(f => (f.get(COLUMNAS.FECHA) || "").trim() === fechaReporte);
   if (yaExiste) {
@@ -259,8 +230,6 @@ export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
     return;
   }
 
-  // 3. Mapear los datos. Si la fila es del día a respaldar, copiamos sus datos reales.
-  // Si es de otra fecha (por ejemplo, ya reportaron hoy) o está vacía, la guardamos con 0 para este histórico.
   const filasDatos = filas.map(f => {
     const obj = f.toObject();
     const esDeFechaResguardo = (obj[COLUMNAS.FECHA] || "").trim() === fechaReporte;
@@ -298,30 +267,23 @@ export async function guardarHistoricoDiario(doc, fechaEspecifica = null) {
     }
   });
 
-  // Guardar en bloque plano justo debajo
   await sheetHistorica.addRows(filasDatos);
   console.log(`[INFO] Historial diario de la fecha ${fechaReporte} guardado con éxito. Se copiaron ${filasDatos.length} filas.`);
 }
 
-// inicializarHojaConNodos y ordenarYLimpiarHojaPrincipal han sido movidas
-// a src/services/sheets.business.js para cumplir el principio de
-// responsabilidad única (SRP). Importar desde allí cuando se necesiten.
-
 /**
- * Recorre el historial de filas (más reciente primero) para obtener los
- * últimos valores no-cero del municipio/nodo indicado, excluyendo la fila
- * que se está editando actualmente.
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheetRow[]} filas
- * @param {string} municipio
- * @param {number} nodo
- * @param {import("google-spreadsheet").GoogleSpreadsheetRow | null} filaExcluida
- * @returns {{ total: number, b1: number, b2: number, b3: number }}
+ * Recorre el historial de filas para obtener los últimos valores acumulados del municipio/nodo.
  */
-export function obtenerUltimosValores(filas, municipio, nodo, fechaActual, filaExcluida = null) {
+export function obtenerUltimosValores(
+  filas: GoogleSpreadsheetRow[],
+  municipio: string,
+  nodo: number | string,
+  fechaActual: string,
+  filaExcluida: GoogleSpreadsheetRow | null = null
+): HistorialAcumulado {
   let total = 0, b1 = 0, b2 = 0, b3 = 0;
   const munBuscado = normalizarTexto(municipio);
-  const nodBuscado = parseInt(nodo, 10);
+  const nodBuscado = parseInt(String(nodo), 10);
 
   for (let i = filas.length - 1; i >= 0; i--) {
     if (filaExcluida && filas[i].rowNumber === filaExcluida.rowNumber) continue;
@@ -332,7 +294,7 @@ export function obtenerUltimosValores(filas, municipio, nodo, fechaActual, filaE
     const fechaFila = obj[COLUMNAS.FECHA] || "";
 
     if (munFila !== munBuscado || nodoFila !== nodBuscado) continue;
-    if (fechaFila !== fechaActual) continue; // ¡Solo del mismo día!
+    if (fechaFila !== fechaActual) continue;
 
     if (!total) total = parseInt(obj[COLUMNAS.TOTAL_VERIFICADORES] || "0", 10);
     if (!b1)    b1    = parseInt(obj[COLUMNAS.BLOQUE_1] || "0", 10);
@@ -344,4 +306,3 @@ export function obtenerUltimosValores(filas, municipio, nodo, fechaActual, filaE
 
   return { total, b1, b2, b3 };
 }
-

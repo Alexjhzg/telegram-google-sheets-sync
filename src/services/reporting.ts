@@ -1,14 +1,12 @@
-"use strict";
-
+import { Api } from "grammy";
+import { GoogleSpreadsheet } from "google-spreadsheet";
 import { config } from "../config/index.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "./sheets.js";
 
 /**
  * Determina el corte horario activo (1: 9am, 2: 2pm, 3: 6pm) basado en la hora local VET.
- *
- * @returns {number}
  */
-export function determinarCorteActivoVET() {
+export function determinarCorteActivoVET(): number {
   const dateVE = new Date();
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Caracas",
@@ -17,22 +15,23 @@ export function determinarCorteActivoVET() {
     hour12: false,
   });
   const parts = formatter.formatToParts(dateVE);
-  const hourVE = parseInt(parts.find((p) => p.type === "hour").value, 10);
-  const minuteVE = parseInt(parts.find((p) => p.type === "minute").value, 10);
+  const hourPart = parts.find((p) => p.type === "hour");
+  const minutePart = parts.find((p) => p.type === "minute");
+
+  const hourVE = hourPart ? parseInt(hourPart.value, 10) : 0;
+  const minuteVE = minutePart ? parseInt(minutePart.value, 10) : 0;
   const minutosDelDia = hourVE * 60 + minuteVE;
 
-  if (minutosDelDia > 1080) return 3; // Después de las 6:00 pm
-  if (minutosDelDia > 840) return 2;  // 2:01 pm a 6:00 pm
-  if (minutosDelDia > 540) return 1;  // 9:01 am a 2:00 pm
-  return 0;                           // Antes de las 9:00 am
+  if (minutosDelDia > 1080) return 3;
+  if (minutosDelDia > 840) return 2;
+  if (minutosDelDia > 540) return 1;
+  return 0;
 }
 
 /**
  * Retorna el mensaje formateado de la leyenda explicativa de la simbología utilizada en los reportes.
- *
- * @returns {string}
  */
-export function obtenerLeyendaEmojis() {
+export function obtenerLeyendaEmojis(): string {
   return (
     `ℹ️ *LEYENDA DE SIMBOLOGÍA DE REPORTES*\n\n` +
     `📍 *Municipio:* Entidad geográfica a la que pertenece el nodo.\n` +
@@ -44,12 +43,8 @@ export function obtenerLeyendaEmojis() {
 
 /**
  * Construye el mensaje consolidado general del Estado Monagas desde 'formato_reporte'.
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
- * @param {number} corte - El corte horario activo: 1 (9am), 2 (2pm), 3 (6pm).
- * @returns {Promise<string>}
  */
-export async function obtenerConsolidadoGeneral(doc, corte) {
+export async function obtenerConsolidadoGeneral(doc: GoogleSpreadsheet, corte: number): Promise<string> {
   const sheet = doc.sheetsByTitle["formato_reporte"];
   if (!sheet) {
     throw new Error("No se encontró la hoja 'formato_reporte' para generar el reporte diario.");
@@ -63,7 +58,7 @@ export async function obtenerConsolidadoGeneral(doc, corte) {
     throw new Error("No se encontró la fila 'TOTAL' en la hoja 'formato_reporte'.");
   }
 
-  const parseVal = (val) => {
+  const parseVal = (val: any): number => {
     if (!val) return 0;
     const parsed = parseFloat(String(val).replace(",", "."));
     return isNaN(parsed) ? 0 : parsed;
@@ -94,8 +89,8 @@ export async function obtenerConsolidadoGeneral(doc, corte) {
 
   const pctAcumulado = ((vAcumulado / limite) * 100).toFixed(2).replace(".", ",");
 
-  const opcionesDia = { timeZone: "America/Caracas", weekday: "long" };
-  const opcionesFecha = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
+  const opcionesDia: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", weekday: "long" };
+  const opcionesFecha: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
   const fechaStr = new Intl.DateTimeFormat("es-VE", opcionesFecha).format(new Date());
   const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
   const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
@@ -113,12 +108,8 @@ export async function obtenerConsolidadoGeneral(doc, corte) {
 
 /**
  * Obtiene el desglose exclusivo de verificadores faltantes agrupados por municipio y nodo.
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
- * @param {number} corte - El corte horario activo: 1 (9am), 2 (2pm), 3 (6pm).
- * @returns {Promise<{ mensajeDesglose: string, totalFaltantes: number, limiteTotal: number }>}
  */
-export async function obtenerDesgloseFaltantes(doc, corte) {
+export async function obtenerDesgloseFaltantes(doc: GoogleSpreadsheet, corte: number): Promise<{ mensajeDesglose: string; totalFaltantes: number; limiteTotal: number }> {
   const hojaNodos = doc.sheetsByTitle["verificadores_nodo"];
   const hojaTelegram = doc.sheetsByTitle["registros_telegram"];
 
@@ -129,7 +120,7 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
   const rowsNodos = await hojaNodos.getRows();
   const rowsTelegram = hojaTelegram ? await hojaTelegram.getRows() : [];
 
-  const telegramMap = new Map();
+  const telegramMap = new Map<string, any>();
   for (const r of rowsTelegram) {
     const mun = (r.get(COLUMNAS.MUNICIPIO) || "").trim().toLowerCase();
     const nod = parseInt(r.get(COLUMNAS.NODO) || "0", 10);
@@ -138,7 +129,7 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
     }
   }
 
-  const municipiosMap = new Map();
+  const municipiosMap = new Map<string, any>();
   let limiteEstado = 0;
   let salieronEstado = 0;
   let faltantesEstado = 0;
@@ -231,8 +222,8 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
     mensajeDesglose += `📍 *${m.municipio}* (Faltan: ${m.faltan} | Salieron: ${m.salieron}/${m.capacidad})\n`;
 
     const nodosFaltantes = m.nodos
-      .filter((n) => n.faltantesNodo > 0)
-      .sort((a, b) => a.nodo - b.nodo);
+      .filter((n: any) => n.faltantesNodo > 0)
+      .sort((a: any, b: any) => a.nodo - b.nodo);
 
     for (const n of nodosFaltantes) {
       let etiquetaEstado = "";
@@ -255,12 +246,8 @@ export async function obtenerDesgloseFaltantes(doc, corte) {
 
 /**
  * Genera el reporte consolidado del estado Monagas en tiempo real.
- * Determina el corte horario dinámicamente según la hora actual y devuelve 3 mensajes.
- *
- * @param {object} doc - Instancia cargada de GoogleSpreadsheet.
- * @returns {Promise<string[]>} Arreglo con [mensajeConsolidado, mensajeDesglose, mensajeLeyenda].
  */
-export async function generarReporteRealTime(doc) {
+export async function generarReporteRealTime(doc: GoogleSpreadsheet): Promise<string[]> {
   const corte = determinarCorteActivoVET();
   const mensajeConsolidado = await obtenerConsolidadoGeneral(doc, corte);
   const { mensajeDesglose } = await obtenerDesgloseFaltantes(doc, corte);
@@ -271,11 +258,8 @@ export async function generarReporteRealTime(doc) {
 
 /**
  * Obtiene los totales del día y los envía según la configuración al canal principal y gerentes.
- *
- * @param {import("grammy").Api} api - API del bot de Telegram.
- * @param {number} corte - El corte de reporte: 1 para 9:05 am, 2 para 2:05 pm, 3 para 6:05 pm.
  */
-export async function enviarReporteDiario(api, corte = 3) {
+export async function enviarReporteDiario(api: Api, corte: number = 3): Promise<void> {
   console.log(`[INFO] Iniciando envío de reporte consolidado (Corte: ${corte})...`);
   try {
     const doc = await obtenerHojaDeCalculo();
@@ -286,18 +270,20 @@ export async function enviarReporteDiario(api, corte = 3) {
     let chatId = process.env.TELEGRAM_REPORT_CHAT_ID;
     if (!chatId) {
       const sheetPrincipal = doc.sheetsByTitle["registros_telegram"];
-      const rowsPrincipal = await sheetPrincipal.getRows();
-      for (const row of rowsPrincipal) {
-        const cId = row.get(COLUMNAS.ID_CHAT);
-        if (cId) {
-          chatId = cId;
-          break;
+      if (sheetPrincipal) {
+        const rowsPrincipal = await sheetPrincipal.getRows();
+        for (const row of rowsPrincipal) {
+          const cId = row.get(COLUMNAS.ID_CHAT);
+          if (cId) {
+            chatId = cId;
+            break;
+          }
         }
       }
     }
 
     if (!chatId) {
-      chatId = -1003785032543;
+      chatId = "-1003785032543";
     }
 
     console.log(`[INFO] Enviando reporte consolidado general (Corte: ${corte}) al Chat ID principal: ${chatId}`);
@@ -308,10 +294,8 @@ export async function enviarReporteDiario(api, corte = 3) {
       for (const managerId of config.telegram.managerChatIds) {
         console.log(`[INFO] Enviando resumen de porcentajes a Gerencia (Chat ID: ${managerId})`);
         try {
-          // En todos los cortes se envía el Resumen Consolidado de Porcentajes
           await api.sendMessage(managerId, mensajeConsolidado, { parse_mode: "Markdown" });
           
-          // Únicamente al final de la jornada (Corte 3 - 6:05 PM) se adjunta el desglose detallado de faltantes y la leyenda
           if (corte === 3) {
             await api.sendMessage(managerId, mensajeDesglose, { parse_mode: "Markdown" });
             await api.sendMessage(managerId, mensajeLeyenda, { parse_mode: "Markdown" });

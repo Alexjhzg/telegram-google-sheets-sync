@@ -1,10 +1,4 @@
-"use strict";
-
-/**
- * Comandos administrativos del bot.
- * Responsabilidad única: responder a comandos Telegram (/reportes, /lista, etc.)
- */
-
+import { Bot, Context } from "grammy";
 import { config } from "../config/index.js";
 import { obtenerNombreRemitente, esUsuarioAdmin } from "../utils/telegram.js";
 import { obtenerHojaDeCalculo, COLUMNAS } from "../services/sheets.js";
@@ -14,16 +8,13 @@ import { sincronizarCatalogoDesdeSheets } from "../services/catalogService.js";
 
 /**
  * Registra todos los comandos administrativos del bot.
- * @param {import("grammy").Bot} bot
  */
-export function registrarComandos(bot) {
-  // /reporte — Consulta el reporte consolidado del estado Monagas en tiempo real
-  bot.command("reporte", async (ctx) => {
+export function registrarComandos(bot: Bot): void {
+  bot.command("reporte", async (ctx: Context) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando /reporte (tiempo real) ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+      console.log(`[INFO] Comando /reporte (tiempo real) ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`);
 
-      // Verificar privilegios de administrador/propietario
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) {
         await ctx.reply("⛔ No tienes permisos autorizados para solicitar reportes.");
@@ -43,21 +34,20 @@ export function registrarComandos(bot) {
     }
   });
 
-  // /lista — Consulta el desglose nodo por nodo de los reportes del día actual
-  bot.command("lista", async (ctx) => {
+  bot.command("lista", async (ctx: Context) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando /lista (desglose) ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+      console.log(`[INFO] Comando /lista (desglose) ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`);
 
-      // Verificar privilegios de administrador/propietario
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) return;
 
       const doc  = await obtenerHojaDeCalculo();
       const hoja = doc.sheetsByTitle["registros_telegram"];
+      if (!hoja) return;
       const filas = await hoja.getRows();
 
-      const opts   = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+      const opts: Intl.DateTimeFormatOptions = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
       const hoyStr = new Date().toLocaleDateString("es-VE", opts);
 
       const reportesHoy = filas.filter(
@@ -85,7 +75,6 @@ export function registrarComandos(bot) {
         const b3    = (fila.get(COLUMNAS.BLOQUE_3)            || "0").trim();
         const total = (fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0").trim();
 
-        // Limitar municipio a 12 caracteres y rellenar
         const munPad   = mun.substring(0, 12).padEnd(12, " ");
         const nodPad   = nod.padEnd(5, " ");
         const b1Pad    = b1.padStart(2, " ");
@@ -104,17 +93,14 @@ export function registrarComandos(bot) {
     }
   });
 
-  // /estado — Diagnóstico del sistema y estado de conexión
-  bot.command("estado", async (ctx) => {
+  bot.command("estado", async (ctx: Context) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando /estado ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+      console.log(`[INFO] Comando /estado ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`);
 
-      // Verificar privilegios de administrador/propietario
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) return;
 
-      // 1. Probar conexión a Google Sheets y cargar datos de hoy
       let sheetsStatus = "✅ Conectado";
       let reporteCargaStr = "";
       try {
@@ -122,18 +108,17 @@ export function registrarComandos(bot) {
         const hoja = doc.sheetsByTitle["registros_telegram"];
         if (hoja) {
           const filas = await hoja.getRows();
-          const opts = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+          const opts: Intl.DateTimeFormatOptions = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
           const hoyStr = new Date().toLocaleDateString("es-VE", opts);
           const reportesHoy = filas.filter(
             (fila) => (fila.get(COLUMNAS.FECHA) || "").trim() === hoyStr
           );
           reporteCargaStr = `• *Nodos reportados hoy:* ${reportesHoy.length} / ${filas.length}\n`;
         }
-      } catch (err) {
+      } catch (err: any) {
         sheetsStatus = `❌ Error: ${err.message}`;
       }
 
-      // 2. Calcular Uptime humano
       const uptimeSecs = process.uptime();
       const d = Math.floor(uptimeSecs / (3600 * 24));
       const h = Math.floor((uptimeSecs % (3600 * 24)) / 3600);
@@ -147,10 +132,8 @@ export function registrarComandos(bot) {
       uptimeParts.push(`${s}s`);
       const uptimeStr = uptimeParts.join(" ");
 
-      // 3. Uso de Memoria heap
       const memory = `${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)} MB`;
 
-      // 4. Hora oficial Venezuela (VET)
       const dateVE = new Date();
       const formatter = new Intl.DateTimeFormat("es-VE", {
         timeZone: config.app.timezone,
@@ -164,7 +147,6 @@ export function registrarComandos(bot) {
       });
       const horaVET = formatter.format(dateVE);
 
-      // 5. Estado de la jornada laboral (Abierto: 6:00 AM - 6:00 PM VET, es decir, 360 - 1080 min)
       const nowVE = Math.floor(Date.now() / 1000);
       const { minutosDelDia } = obtenerBloqueYHoraActivo(nowVE);
       const horarioLaboral = (minutosDelDia >= 360 && minutosDelDia <= 1080)
@@ -187,11 +169,10 @@ export function registrarComandos(bot) {
     }
   });
 
-  // /sync_nodos o /actualizar_catalogo — Forzar sincronización manual del catálogo desde Sheets a SQL
-  const handlerSync = async (ctx) => {
+  const handlerSync = async (ctx: Context) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando de sincronización de catálogo ejecutado por ${remitente} (Chat: ${ctx.chat.id})`);
+      console.log(`[INFO] Comando de sincronización de catálogo ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`);
 
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) {

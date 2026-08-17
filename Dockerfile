@@ -20,7 +20,7 @@ COPY package.json package-lock.json* ./
 # ── PASO 2: Instalar solo dependencias de producción ──────────
 # --omit=dev excluye devDependencies para reducir el tamaño de la imagen.
 # --frozen-lockfile garantiza instalaciones reproducibles.
-RUN npm ci --omit=dev
+RUN npm ci
 
 # ── PASO 3: Copiar el resto del código fuente ─────────────────
 # El .dockerignore excluye node_modules, .env y otros archivos innecesarios.
@@ -34,4 +34,4 @@ USER node
 EXPOSE 8080
 
 # ── Comando de inicio ─────────────────────────────────────────
-CMD ["node", "bot.js"]
+CMD ["npx", "tsx", "bot.ts"]

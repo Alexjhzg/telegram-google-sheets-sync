@@ -2,13 +2,14 @@
   "name": "bot-telegram-campo",
   "version": "1.0.0",
   "description": "Bot de Telegram para supervisión de personal en campo. Extrae datos de reportes y los registra en Google Sheets.",
-  "main": "bot.js",
+  "main": "bot.ts",
   "type": "module",
   "scripts": {
-    "start": "node bot.js",
-    "test": "node --test",
-    "db:seed": "node scripts/seed_catalog.js",
-    "sheets:setup": "node scripts/setup_reporte_diario.js"
+    "start": "tsx bot.ts",
+    "build": "tsc --noEmit",
+    "test": "tsx --test",
+    "db:seed": "tsx scripts/seed_catalog.ts",
+    "sheets:setup": "tsx scripts/setup_reporte_diario.ts"
   },
   "engines": {
     "node": ">=20.0.0"

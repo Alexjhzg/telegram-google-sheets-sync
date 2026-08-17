@@ -1,13 +1,4 @@
-"use strict";
-
-/**
- * Lógica de negocio específica de Monagas sobre Google Sheets:
- * inicialización de nodos fijos, saneamiento y ordenamiento de la hoja principal.
- *
- * Importar desde aquí solo lo que tenga reglas de negocio propias;
- * las operaciones genéricas de Sheets siguen en sheets.js.
- */
-
+import { GoogleSpreadsheet } from "google-spreadsheet";
 import {
   COLUMNAS,
   asegurarColumnas,
@@ -15,24 +6,14 @@ import {
   normalizarTexto,
 } from "./sheets.js";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTES DE NEGOCIO
-// ─────────────────────────────────────────────────────────────────────────────
 const HOJA_PRINCIPAL  = "registros_telegram";
 const HOJA_CATALOGO   = "verificadores_nodo";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FUNCIONES EXPORTADAS
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Inicializa la hoja principal con una fila fija por cada nodo del catálogo
  * 'verificadores_nodo'. Si una fila para ese nodo ya existe, no hace nada.
- * Debe llamarse al arrancar el bot.
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
  */
-export async function inicializarHojaConNodos(doc) {
+export async function inicializarHojaConNodos(doc: GoogleSpreadsheet): Promise<void> {
   const hojaNodos = doc.sheetsByTitle[HOJA_CATALOGO];
   if (!hojaNodos) {
     console.error(`[ERROR] No se encontró la hoja '${HOJA_CATALOGO}'. No se puede inicializar.`);
@@ -40,6 +21,8 @@ export async function inicializarHojaConNodos(doc) {
   }
 
   const hoja = doc.sheetsByTitle[HOJA_PRINCIPAL];
+  if (!hoja) return;
+
   await asegurarColumnas(hoja);
 
   const filasNodos    = await hojaNodos.getRows();
@@ -79,13 +62,9 @@ export async function inicializarHojaConNodos(doc) {
 }
 
 /**
- * Elimina filas vacías o huérfanas (nodos ausentes del catálogo) y ordena las
- * filas restantes por Municipio (A→Z) y Nodo (menor→mayor).
- * Optimización: omite escritura si el orden ya es correcto.
- *
- * @param {import("google-spreadsheet").GoogleSpreadsheet} doc
+ * Elimina filas vacías o huérfanas y ordena las filas restantes por Municipio (A→Z) y Nodo (menor→mayor).
  */
-export async function ordenarYLimpiarHojaPrincipal(doc) {
+export async function ordenarYLimpiarHojaPrincipal(doc: GoogleSpreadsheet): Promise<void> {
   console.log(`[INFO] Iniciando ordenamiento y limpieza de '${HOJA_PRINCIPAL}'...`);
   try {
     const hojaNodos    = doc.sheetsByTitle[HOJA_CATALOGO];
@@ -96,7 +75,6 @@ export async function ordenarYLimpiarHojaPrincipal(doc) {
       return;
     }
 
-    // 1. Construir el Set de nodos permitidos desde el catálogo
     const filasNodos = await hojaNodos.getRows();
     const catalogoSet = new Set(
       filasNodos
@@ -105,10 +83,9 @@ export async function ordenarYLimpiarHojaPrincipal(doc) {
           const nod = parseInt(r.get("NODO") || "0", 10);
           return (mun && nod) ? `${mun}-${nod}` : null;
         })
-        .filter(Boolean)
+        .filter((val): val is string => Boolean(val))
     );
 
-    // 2. Purgar filas vacías u huérfanas (de atrás hacia adelante para preservar índices)
     let filas = await hojaPrincipal.getRows();
     let eliminadas = 0;
 
@@ -129,7 +106,6 @@ export async function ordenarYLimpiarHojaPrincipal(doc) {
     }
     if (filas.length === 0) return;
 
-    // 3. Leer datos en memoria para ordenar sin lecturas extra a la API
     const datos = filas.map(fila => ({
       municipio: (fila.get(COLUMNAS.MUNICIPIO) || "").trim(),
       nodo:      parseInt(fila.get(COLUMNAS.NODO) || "0", 10),
@@ -145,13 +121,11 @@ export async function ordenarYLimpiarHojaPrincipal(doc) {
       estado:    fila.get(COLUMNAS.ESTADO) || "",
     }));
 
-    // 4. Ordenar: primero Municipio (A→Z), luego Nodo (numérico asc)
     datos.sort((a, b) => {
       const cmpMun = a.municipio.localeCompare(b.municipio);
       return cmpMun !== 0 ? cmpMun : a.nodo - b.nodo;
     });
 
-    // 5. Verificar si ya están ordenadas para evitar escrituras innecesarias
     const yaOrdenado = filas.every((fila, i) =>
       (fila.get(COLUMNAS.MUNICIPIO) || "").trim() === datos[i].municipio &&
       parseInt(fila.get(COLUMNAS.NODO) || "0", 10) === datos[i].nodo
@@ -162,7 +136,6 @@ export async function ordenarYLimpiarHojaPrincipal(doc) {
       return;
     }
 
-    // 6. Escribir el nuevo orden fila a fila
     console.log("[INFO] Reordenando filas en Google Sheets...");
     for (let i = 0; i < filas.length; i++) {
       const fila = filas[i];

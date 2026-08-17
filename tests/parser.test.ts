@@ -28,13 +28,11 @@ test("parser - parsearReporte devuelve null si falta municipio o nodo", () => {
 });
 
 test("parser - obtenerBloqueYHoraActivo determina correctamente bloques según horario", () => {
-  // Timestamp simulado a las 8:00 AM VET (12:00 UTC)
   const timestamp8am = Math.floor(new Date("2026-08-14T12:00:00Z").getTime() / 1000);
   const info8am = obtenerBloqueYHoraActivo(timestamp8am);
   assert.equal(info8am.bloqueActivo, 1);
   assert.equal(info8am.bloqueStr, "9am");
 
-  // Timestamp simulado a las 11:00 AM VET (15:00 UTC)
   const timestamp11am = Math.floor(new Date("2026-08-14T15:00:00Z").getTime() / 1000);
   const info11am = obtenerBloqueYHoraActivo(timestamp11am);
   assert.equal(info11am.bloqueActivo, 2);

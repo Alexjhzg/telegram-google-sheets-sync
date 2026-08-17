@@ -1,5 +1,3 @@
-"use strict";
-
 import { obtenerHojaDeCalculo } from "../src/services/sheets.js";
 
 /**
@@ -14,7 +12,6 @@ async function configurarReportesNativos() {
     const doc = await obtenerHojaDeCalculo();
     console.log("[1/5] Conexión establecida con Google Sheets.");
 
-    // 1. Obtener datos de la hoja verificadores_nodo (filtrando filas vacías y la fila de 'TOTAL')
     const hojaNodos = doc.sheetsByTitle["verificadores_nodo"];
     if (!hojaNodos) {
       console.error("[ERROR] No se encontró la hoja 'verificadores_nodo' para estructurar los reportes.");
@@ -31,7 +28,6 @@ async function configurarReportesNativos() {
     const cantNodos = filasNodos.length;
     console.log(`[INFO] Se detectaron ${cantNodos} nodos válidos en 'verificadores_nodo'.`);
 
-    // ── PESTAÑA 1: 'reporte_nodo' (Nodos Granular) ───────────────────────────
     console.log("[2/5] Configurando pestaña 'reporte_nodo' (Nodos)...");
     
     let sheetReporte = doc.sheetsByTitle["reporte_nodo"];
@@ -50,7 +46,6 @@ async function configurarReportesNativos() {
     await sheetReporte.resize({ rowCount: totalFilasNodos, columnCount: 8 });
     await sheetReporte.loadCells(`A1:H${totalFilasNodos}`);
 
-    // Limpiar todas las celdas previamente cargadas
     for (let r = 0; r < totalFilasNodos; r++) {
       for (let c = 0; c < 8; c++) {
         sheetReporte.getCell(r, c).value = null;
@@ -71,10 +66,9 @@ async function configurarReportesNativos() {
       sheetReporte.getCell(0, c).value = cabecerasNodos[c];
     }
 
-    // Llenar fórmulas de nodos
     for (let i = 0; i < cantNodos; i++) {
       const rowIdx = i + 1;
-      const numFila = rowIdx + 1; // Fila 2, 3, 4...
+      const numFila = rowIdx + 1;
       const filaObj = filasNodos[i];
 
       const munVal = (filaObj.get("MUNICIPIO") || "").trim();
@@ -90,9 +84,8 @@ async function configurarReportesNativos() {
       sheetReporte.getCell(rowIdx, 6).formula = `=TEXT(TODAY() - 1, "dd/mm/yyyy")`;
     }
 
-    // Fila TOTALES al final de la pestaña reporte_nodo
     const filaTotalNodoIdx = cantNodos + 1;
-    const numFilaFinNodos = cantNodos + 1; // Fila 48 (si cantNodos = 47)
+    const numFilaFinNodos = cantNodos + 1;
 
     sheetReporte.getCell(filaTotalNodoIdx, 0).value = "TOTAL";
     sheetReporte.getCell(filaTotalNodoIdx, 1).value = null;
@@ -105,7 +98,6 @@ async function configurarReportesNativos() {
     await sheetReporte.saveUpdatedCells();
     console.log("[3/5] ✅ Pestaña 'reporte_nodo' (Nodos) guardada con éxito (incluyendo fila TOTAL).");
 
-    // ── PESTAÑA 2: 'reporte_diario_municipio' (Consolidado Municipal) ────────
     console.log("[4/5] Configurando pestaña 'reporte_diario_municipio' (Consolidado Municipal)...");
     let sheetMunicipio = doc.sheetsByTitle["reporte_diario_municipio"];
     if (!sheetMunicipio) {
@@ -113,8 +105,7 @@ async function configurarReportesNativos() {
       sheetMunicipio = await doc.addSheet({ title: "reporte_diario_municipio" });
     }
 
-    // Obtener municipios únicos (excluyendo TOTAL)
-    const municipiosSet = new Set();
+    const municipiosSet = new Set<string>();
     for (const r of filasNodos) {
       const m = (r.get("MUNICIPIO") || "").trim();
       if (m && m.toUpperCase() !== "TOTAL") {
@@ -128,7 +119,6 @@ async function configurarReportesNativos() {
     await sheetMunicipio.resize({ rowCount: totalFilasMun, columnCount: 8 });
     await sheetMunicipio.loadCells(`A1:H${totalFilasMun}`);
 
-    // Limpiar todas las celdas de la hoja antes de escribir
     for (let r = 0; r < totalFilasMun; r++) {
       for (let c = 0; c < 8; c++) {
         sheetMunicipio.getCell(r, c).value = null;
@@ -152,7 +142,7 @@ async function configurarReportesNativos() {
     const primeraFilaDatos = 2;
 
     for (const mun of listaMunicipios) {
-      const numFilaM = filaActual + 1; // Fila 2, 3...
+      const numFilaM = filaActual + 1;
       sheetMunicipio.getCell(filaActual, 0).value = mun;
       sheetMunicipio.getCell(filaActual, 1).formula = `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!C:C), 0)`;
       sheetMunicipio.getCell(filaActual, 2).formula = `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!D:D), 0)`;
@@ -163,9 +153,8 @@ async function configurarReportesNativos() {
       filaActual++;
     }
 
-    const ultimaFilaDatos = filaActual; // Fila final de municipios
+    const ultimaFilaDatos = filaActual;
 
-    // Fila TOTALES (Única al final)
     sheetMunicipio.getCell(filaActual, 0).value = "TOTAL";
     sheetMunicipio.getCell(filaActual, 1).formula = `=ROUND(SUM(B${primeraFilaDatos}:B${ultimaFilaDatos}), 0)`;
     sheetMunicipio.getCell(filaActual, 2).formula = `=ROUND(SUM(C${primeraFilaDatos}:C${ultimaFilaDatos}), 0)`;

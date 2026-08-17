@@ -11,16 +11,16 @@ test("sheets - normalizarTexto elimina tildes, mayúsculas y espacios extra", ()
 });
 
 test("sheets - buscarFilaPorNodo encuentra la fila independientemente de tildes o mayúsculas", () => {
-  const filasMock = [
+  const filasMock: any[] = [
     {
-      get: (col) => {
+      get: (col: string) => {
         if (col === "Municipio") return "Maturin";
         if (col === "Nodo") return "16039";
         return "";
       },
     },
     {
-      get: (col) => {
+      get: (col: string) => {
         if (col === "Municipio") return "Cedeño";
         if (col === "Nodo") return "16040";
         return "";
@@ -42,7 +42,7 @@ test("sheets - buscarFilaPorNodo encuentra la fila independientemente de tildes 
 
 test("sheets - obtenerUltimosValores recupera correctamente los valores acumulados", () => {
   const fechaHoy = "14/08/2026";
-  const filasMock = [
+  const filasMock: any[] = [
     {
       rowNumber: 1,
       toObject: () => ({

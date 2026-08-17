@@ -1,15 +1,12 @@
-"use strict";
-
 import { obtenerHojaDeCalculo, normalizarTexto, sheetsMutex } from "./sheets.js";
 import { esDBActiva, upsertCatalogoNodosDB } from "./database.js";
+import { SyncCatalogoResultado } from "../types/index.js";
 
 /**
  * Lee el catálogo de municipios, nodos y límites de verificadores desde la hoja
  * 'verificadores_nodo' en Google Sheets y los sincroniza hacia PostgreSQL.
- *
- * @returns {Promise<{ exitoso: boolean, sincronizados: number, error?: string, razon?: string }>}
  */
-export async function sincronizarCatalogoDesdeSheets() {
+export async function sincronizarCatalogoDesdeSheets(): Promise<SyncCatalogoResultado> {
   if (!esDBActiva()) {
     console.log("[INFO] Base de Datos relacional no activa. Omitiendo sincronización de catálogo.");
     return { exitoso: false, sincronizados: 0, razon: "DB_NO_ACTIVA" };
@@ -27,7 +24,7 @@ export async function sincronizarCatalogoDesdeSheets() {
       }
 
       const filas = await hojaNodos.getRows();
-      const nodosParaSincronizar = [];
+      const nodosParaSincronizar: Array<{ municipio: string; municipioNormalizado: string; nodo: number; limiteVerificadores: number }> = [];
 
       for (const fila of filas) {
         const municipio = (fila.get("MUNICIPIO") || "").trim();
@@ -55,7 +52,7 @@ export async function sincronizarCatalogoDesdeSheets() {
       const res = await upsertCatalogoNodosDB(nodosParaSincronizar);
       console.log(`[SYNC] Catálogo sincronizado exitosamente: ${res.guardados} nodos procesados.`);
       return { exitoso: true, sincronizados: res.guardados };
-    } catch (error) {
+    } catch (error: any) {
       console.error("[ERROR] Falló la sincronización del catálogo desde Google Sheets:", error.message);
       return { exitoso: false, sincronizados: 0, error: error.message };
     }

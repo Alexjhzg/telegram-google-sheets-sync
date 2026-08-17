@@ -1,5 +1,4 @@
-"use strict";
-
+import { Context } from "grammy";
 import { config } from "../config/index.js";
 
 /**
@@ -10,10 +9,9 @@ import { config } from "../config/index.js";
  * En ese caso intentamos usar la firma del autor (author_signature) o
  * el título del chat como identificador alternativo.
  *
- * @param {import("grammy").Context} ctx
- * @returns {string}
+ * @param ctx - Contexto de Grammy.
  */
-export function obtenerNombreRemitente(ctx) {
+export function obtenerNombreRemitente(ctx: Context): string {
   const from = ctx.from;
 
   // Admin anónimo de grupo (GroupAnonymousBot)
@@ -22,7 +20,7 @@ export function obtenerNombreRemitente(ctx) {
     // author_signature: nombre que pone el admin cuando publica anónimamente
     if (mensajeObj?.author_signature) return mensajeObj.author_signature;
     // Fallback: título del grupo con etiqueta
-    const titulo = ctx.chat?.title;
+    const titulo = ctx.chat && "title" in ctx.chat ? ctx.chat.title : null;
     return titulo ? `Admin de ${titulo}` : "Admin Anónimo";
   }
 
@@ -36,43 +34,41 @@ export function obtenerNombreRemitente(ctx) {
 /**
  * Intenta agregar una reacción al mensaje de forma segura, sin lanzar
  * error si el chat no admite reacciones.
- * @param {import("grammy").Context} ctx
- * @param {string} emoji
+ * @param ctx - Contexto de Grammy.
+ * @param emoji - Emoji a reaccionar.
  */
-export async function reaccionar(ctx, emoji) {
+export async function reaccionar(ctx: Context, emoji: string): Promise<void> {
   const messageId = ctx.message?.message_id || ctx.editedMessage?.message_id;
   try {
-    await ctx.react(emoji);
+    await ctx.react(emoji as any);
     console.log(`[INFO] Reacción con '${emoji}' añadida al mensaje ID: ${messageId}`);
-  } catch (error) {
+  } catch (error: any) {
     console.warn(`[ADVERTENCIA] No se pudo reaccionar con '${emoji}' al mensaje ID ${messageId}: ${error.message}`);
   }
 }
-
 
 /**
  * Verifica si el usuario actual es administrador o el creador del chat,
  * o si está autorizado en chats privados a través de managerChatIds.
  *
- * @param {import("grammy").Context} ctx
- * @returns {Promise<boolean>}
+ * @param ctx - Contexto de Grammy.
  */
-export async function esUsuarioAdmin(ctx) {
-  // En chats privados, se permite si su ID está registrada en managerChatIds
+export async function esUsuarioAdmin(ctx: Context): Promise<boolean> {
   if (ctx.chat?.type === "private") {
     const userId = String(ctx.from?.id);
     return config.telegram.managerChatIds.includes(userId);
   }
 
-  // Si el usuario es el canal anónimo o "GroupAnonymousBot", es admin de forma implícita
   if (ctx.from?.id === 1087968824) {
     return true;
   }
 
+  if (!ctx.from?.id) return false;
+
   try {
     const chatMember = await ctx.getChatMember(ctx.from.id);
     return chatMember.status === "administrator" || chatMember.status === "creator";
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[ERROR] No se pudo verificar rango del usuario ${ctx.from?.id}:`, error.message);
     return false;
   }

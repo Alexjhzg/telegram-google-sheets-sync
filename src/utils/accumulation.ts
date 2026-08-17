@@ -1,25 +1,31 @@
-"use strict";
+import { ReporteParseado, HistorialAcumulado, ResultadoAcumulacion } from "../types/index.js";
 
 /**
  * Calcula los valores finales acumulados de verificadores para los bloques B1, B2 y B3
  * de acuerdo con el bloque activo en curso y los valores históricos del día.
  * Implementa la lógica de "Pasado Bloqueado / Presente y Futuro Abiertos" y acumulación de incrementos.
  *
- * @param {number} bloqueActivo - Bloque de tiempo activo actualmente (1, 2 o 3).
- * @param {object} reporte - Datos parseados del reporte entrante.
- * @param {object} historial - Valores acumulados previos del mismo día de Sheets.
- * @returns {{ b1Final: number, b2Final: number, b3Final: number }} Valores calculados resultantes.
+ * @param bloqueActivo - Bloque de tiempo activo actualmente (1, 2 o 3).
+ * @param reporte - Datos parseados del reporte entrante.
+ * @param historial - Valores acumulados previos del mismo día de Sheets.
+ * @returns Valores calculados resultantes.
  */
-export function calcularAcumulacion(bloqueActivo, reporte, historial) {
+export function calcularAcumulacion(
+  bloqueActivo: number,
+  reporte: Partial<ReporteParseado> & { totalVerificadores?: number; bloque1?: number | null; bloque2?: number | null; bloque3?: number | null },
+  historial: HistorialAcumulado
+): ResultadoAcumulacion {
   const { totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
 
   // Normalizar los valores de los bloques a enteros (0 por defecto) si fueron provistos
-  const b1Msg = bloque1 !== null ? bloque1 : 0;
-  const b2Msg = bloque2 !== null ? bloque2 : 0;
-  const b3Msg = bloque3 !== null ? bloque3 : 0;
+  const b1Msg = bloque1 !== null && bloque1 !== undefined ? bloque1 : 0;
+  const b2Msg = bloque2 !== null && bloque2 !== undefined ? bloque2 : 0;
+  const b3Msg = bloque3 !== null && bloque3 !== undefined ? bloque3 : 0;
 
   // Identificar si el supervisor proveyó la estructura explícita de bloques en el mensaje
-  const tieneEstructuraBloques = (bloque1 !== null || bloque2 !== null || bloque3 !== null);
+  const tieneEstructuraBloques = (bloque1 !== null && bloque1 !== undefined) ||
+                                 (bloque2 !== null && bloque2 !== undefined) ||
+                                 (bloque3 !== null && bloque3 !== undefined);
 
   // Inicializar acumulaciones finales con los valores históricos
   let b1Final = historial.b1;
