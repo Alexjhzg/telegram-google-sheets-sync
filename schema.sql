@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS reportes_diarios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     municipio VARCHAR(150) NOT NULL,
     municipio_normalizado VARCHAR(150) NOT NULL,
+    -- FK simple al catálogo de nodos (reemplaza la FK compuesta original)
+    catalogo_nodo_id UUID NOT NULL,
     nodo INTEGER NOT NULL,
     fecha DATE NOT NULL,
     hora VARCHAR(20),
@@ -40,17 +42,22 @@ CREATE TABLE IF NOT EXISTS reportes_diarios (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT unq_nodo_fecha UNIQUE (nodo, fecha),
-    CONSTRAINT fk_reportes_nodos_catalogo 
-        FOREIGN KEY (municipio_normalizado, nodo) 
-        REFERENCES nodos_catalogo (municipio_normalizado, nodo) 
-        ON UPDATE CASCADE 
+    -- FK simple UUID → nodos_catalogo.id (panel relacional de Supabase compatible)
+    CONSTRAINT fk_reportes_catalogo_id
+        FOREIGN KEY (catalogo_nodo_id)
+        REFERENCES nodos_catalogo (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
+    -- NOTA: La FK compuesta original (municipio_normalizado, nodo) fue eliminada
+    --       en la migración migration_paso1.sql / migration_paso2.sql
 );
 
 -- Índices para consultas por fecha, nodo y estado
 CREATE INDEX IF NOT EXISTS idx_reportes_fecha ON reportes_diarios (fecha);
 CREATE INDEX IF NOT EXISTS idx_reportes_nodo_fecha ON reportes_diarios (nodo, fecha);
 CREATE INDEX IF NOT EXISTS idx_reportes_message_id ON reportes_diarios (telegram_message_id);
+CREATE INDEX IF NOT EXISTS idx_reportes_catalogo_id ON reportes_diarios (catalogo_nodo_id);
+
 
 
 -- 3. Tabla de Auditoría e Historial Inmutable

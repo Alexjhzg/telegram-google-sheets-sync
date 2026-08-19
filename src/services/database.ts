@@ -96,6 +96,7 @@ export async function guardarOActualizarReporteDB(datos: any): Promise<any> {
   }
 
   const munNormalizado = normalizarTexto(datos.municipioOficial);
+  const nodInt = parseInt(datos.nodo, 10);
 
   let fechaISO = datos.fecha;
   if (datos.fecha && datos.fecha.includes("/")) {
@@ -105,10 +106,30 @@ export async function guardarOActualizarReporteDB(datos: any): Promise<any> {
     }
   }
 
+  // Resolver el UUID de la FK simple hacia nodos_catalogo
+  let catalogoNodoId: string | null = null;
+  try {
+    const { data: catalogoRow } = await client
+      .from("nodos_catalogo")
+      .select("id")
+      .eq("municipio_normalizado", munNormalizado)
+      .eq("nodo", nodInt)
+      .maybeSingle();
+
+    catalogoNodoId = catalogoRow?.id ?? null;
+
+    if (!catalogoNodoId) {
+      console.warn(`[ADVERTENCIA] No se encontró catalogo_nodo_id para municipio="${munNormalizado}", nodo=${nodInt}. Se guardará sin FK.`);
+    }
+  } catch (errLookup: any) {
+    console.warn("[ADVERTENCIA] No se pudo resolver catalogo_nodo_id:", errLookup.message);
+  }
+
   const payload = {
     municipio: datos.municipioOficial,
     municipio_normalizado: munNormalizado,
-    nodo: parseInt(datos.nodo, 10),
+    catalogo_nodo_id: catalogoNodoId,
+    nodo: nodInt,
     fecha: fechaISO,
     hora: datos.hora,
     bloque_1: datos.b1Final,

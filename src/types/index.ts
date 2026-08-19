@@ -46,7 +46,7 @@ export interface ResultadoAcumulacion {
 }
 
 export interface NodoCatalogo {
-  id?: string;
+  id?: string;                     // UUID de la fila en nodos_catalogo (pk)
   municipio: string;
   municipioNormalizado?: string;
   municipio_normalizado?: string;
@@ -59,6 +59,7 @@ export interface ReporteDiarioDB {
   id?: string;
   municipio: string;
   municipio_normalizado: string;
+  catalogo_nodo_id?: string | null; // UUID FK → nodos_catalogo.id
   nodo: number;
   fecha: string;
   hora?: string;
