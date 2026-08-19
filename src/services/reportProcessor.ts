@@ -230,13 +230,15 @@ export async function procesarYGuardarReporte({
 
     if (esDBActiva()) {
       try {
-        await guardarOActualizarReporteDB(datosFinales);
+        const reporteGuardado = await guardarOActualizarReporteDB(datosFinales);
         await registrarAuditoriaDB({
           chatId,
           messageId,
           remitente,
           accion: esEdicion ? "EDICION" : "CREACION",
           detalles: datosFinales,
+          reporteId:       reporteGuardado?.id            ?? null,
+          catalogoNodoId:  reporteGuardado?.catalogo_nodo_id ?? null,
         });
       } catch (errDb: any) {
         console.error("[ERROR] Falló guardado en Base de Datos:", errDb.message);

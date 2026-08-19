@@ -66,10 +66,26 @@ CREATE TABLE IF NOT EXISTS logs_auditoria (
     telegram_chat_id BIGINT,
     telegram_message_id BIGINT,
     remitente VARCHAR(150),
-    accion VARCHAR(50) NOT NULL, -- 'CREACION', 'EDICION', 'ELIMINACION', 'ERROR'
+    accion VARCHAR(50) NOT NULL,        -- 'CREACION', 'EDICION', 'ELIMINACION', 'ERROR'
     detalles JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    -- FKs relacionales (nullable: logs de error no tienen reporte asociado)
+    reporte_id UUID,                    -- FK → reportes_diarios.id (SET NULL al borrar)
+    catalogo_nodo_id UUID,              -- FK → nodos_catalogo.id   (SET NULL al borrar)
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_auditoria_reporte
+        FOREIGN KEY (reporte_id)
+        REFERENCES reportes_diarios (id)
+        ON DELETE SET NULL,
+    CONSTRAINT fk_auditoria_catalogo
+        FOREIGN KEY (catalogo_nodo_id)
+        REFERENCES nodos_catalogo (id)
+        ON DELETE SET NULL
 );
+
+-- Índices de auditoría
+CREATE INDEX IF NOT EXISTS idx_auditoria_reporte_id   ON logs_auditoria (reporte_id);
+CREATE INDEX IF NOT EXISTS idx_auditoria_catalogo_id  ON logs_auditoria (catalogo_nodo_id);
+
 
 -- Trigger para actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()

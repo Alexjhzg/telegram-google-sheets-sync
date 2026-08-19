@@ -80,6 +80,8 @@ export interface AuditoriaPayload {
   remitente: string;
   accion: string;
   detalles: any;
+  reporteId?: string | null;       // UUID FK → reportes_diarios.id
+  catalogoNodoId?: string | null;  // UUID FK → nodos_catalogo.id
 }
 
 export interface DatosReporteProcesar {

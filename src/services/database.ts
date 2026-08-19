@@ -164,18 +164,21 @@ export async function guardarOActualizarReporteDB(datos: any): Promise<any> {
 
 /**
  * Registra una acción en la tabla de auditoría de la Base de Datos.
+ * Incluye las FKs al reporte y al catálogo de nodo cuando están disponibles.
  */
-export async function registrarAuditoriaDB({ chatId, messageId, remitente, accion, detalles }: AuditoriaPayload): Promise<void> {
+export async function registrarAuditoriaDB({ chatId, messageId, remitente, accion, detalles, reporteId, catalogoNodoId }: AuditoriaPayload): Promise<void> {
   const client = obtenerClienteDB();
   if (!client) return;
 
   try {
     await client.from("logs_auditoria").insert({
-      telegram_chat_id: chatId ? BigInt(chatId) : null,
+      telegram_chat_id:    chatId    ? BigInt(chatId)    : null,
       telegram_message_id: messageId ? BigInt(messageId) : null,
       remitente,
       accion,
       detalles,
+      reporte_id:       reporteId      ?? null,  // FK → reportes_diarios.id
+      catalogo_nodo_id: catalogoNodoId ?? null,  // FK → nodos_catalogo.id
     });
   } catch (err: any) {
     console.warn("[ADVERTENCIA] No se pudo guardar log de auditoría en la Base de Datos:", err.message);
