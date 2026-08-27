@@ -251,3 +251,73 @@ export async function upsertCatalogoNodosDB(nodos: Array<{ municipio: string; mu
   console.log(`[INFO] ${cantidad} nodo(s) sincronizado(s)/actualizado(s) exitosamente en la Base de Datos.`);
   return { guardados: cantidad };
 }
+
+/**
+ * Guarda/actualiza el lote de nodos activos y elimina de la Base de Datos relacional
+ * aquellos nodos que ya no se encuentren en la lista activa suministrada.
+ */
+export async function reconciliarCatalogoNodosDB(
+  nodosActivos: Array<{ municipio: string; municipioNormalizado?: string; nodo: number; limiteVerificadores?: number }>
+): Promise<{ guardados: number; eliminados: number }> {
+  const client = obtenerClienteDB();
+  if (!client) {
+    throw new Error("La base de datos relacional no está configurada");
+  }
+
+  // 1. Inserción/Actualización (Upsert) de nodos activos
+  let guardados = 0;
+  if (Array.isArray(nodosActivos) && nodosActivos.length > 0) {
+    const resUpsert = await upsertCatalogoNodosDB(nodosActivos);
+    guardados = resUpsert.guardados;
+  }
+
+  // 2. Reconciliación: Obtener todos los nodos en Supabase
+  const { data: nodosExistentes, error: errFetch } = await client
+    .from("nodos_catalogo")
+    .select("id, municipio_normalizado, nodo");
+
+  if (errFetch) {
+    console.error("[ERROR] Error al consultar nodos existentes en la Base de Datos:", errFetch.message);
+    return { guardados, eliminados: 0 };
+  }
+
+  if (!nodosExistentes || nodosExistentes.length === 0) {
+    return { guardados, eliminados: 0 };
+  }
+
+  // Claves activas provenientes de Google Sheets (municipio_normalizado + "__" + nodo)
+  const clavesActivas = new Set(
+    (nodosActivos || []).map(
+      (n) => `${n.municipioNormalizado || normalizarTexto(n.municipio)}__${parseInt(String(n.nodo), 10)}`
+    )
+  );
+
+  // Identificar IDs en la BD que ya no están en Google Sheets
+  const idsAEliminar = nodosExistentes
+    .filter((n) => !clavesActivas.has(`${n.municipio_normalizado}__${n.nodo}`))
+    .map((n) => n.id);
+
+  if (idsAEliminar.length === 0) {
+    return { guardados, eliminados: 0 };
+  }
+
+  console.log(`[INFO] Detectados ${idsAEliminar.length} nodo(s) obsoleto(s) a eliminar en la Base de Datos...`);
+
+  // 3. Eliminar los nodos obsoletos de Supabase
+  const { data: eliminadosData, error: deleteErr } = await client
+    .from("nodos_catalogo")
+    .delete()
+    .in("id", idsAEliminar)
+    .select();
+
+  let eliminadosCount = 0;
+  if (deleteErr) {
+    console.warn("[ADVERTENCIA] No se pudieron eliminar algunos nodos obsoletos (posible reporte asociado FK):", deleteErr.message);
+  } else {
+    eliminadosCount = eliminadosData?.length || idsAEliminar.length;
+    console.log(`[INFO] ${eliminadosCount} nodo(s) obsoleto(s) eliminado(s) exitosamente de la Base de Datos.`);
+  }
+
+  return { guardados, eliminados: eliminadosCount };
+}
+

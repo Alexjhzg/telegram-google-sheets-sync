@@ -111,6 +111,7 @@ export interface ResultadoProcesamiento {
 export interface SyncCatalogoResultado {
   exitoso: boolean;
   sincronizados: number;
+  eliminados?: number;
   razon?: string;
   error?: string;
 }

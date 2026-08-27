@@ -184,7 +184,10 @@ export function registrarComandos(bot: Bot): void {
       const res = await sincronizarCatalogoDesdeSheets();
 
       if (res.exitoso) {
-        await ctx.reply(`✅ *Catálogo sincronizado exitosamente*\n\nSe procesaron y actualizaron \`${res.sincronizados}\` nodos en la base de datos SQL.`, { parse_mode: "Markdown" });
+        let msg = `✅ *Catálogo sincronizado exitosamente*\n\n` +
+          `• *Nodos guardados/actualizados:* \`${res.sincronizados}\`\n` +
+          `• *Nodos obsoletos eliminados:* \`${res.eliminados || 0}\``;
+        await ctx.reply(msg, { parse_mode: "Markdown" });
       } else {
         await ctx.reply(`⚠️ *Fallo en la sincronización del catálogo*\n\nRazón: \`${res.error || res.razon || "Desconocida"}\``, { parse_mode: "Markdown" });
       }

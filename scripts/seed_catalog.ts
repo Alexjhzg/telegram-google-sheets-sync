@@ -1,66 +1,27 @@
-import { obtenerHojaDeCalculo, normalizarTexto } from "../src/services/sheets.js";
-import { obtenerClienteDB, esDBActiva } from "../src/services/database.js";
+import { sincronizarCatalogoDesdeSheets } from "../src/services/catalogService.js";
+import { esDBActiva } from "../src/services/database.js";
 
 /**
- * Script para migrar/poblar automáticamente el catálogo de nodos
+ * Script para migrar/poblar/reconciliar automáticamente el catálogo de nodos
  * desde la hoja 'verificadores_nodo' de Google Sheets hacia la Base de Datos relacional.
  */
 async function poblarCatalogo() {
-  console.log("=== INICIANDO MIGRACIÓN/POBLADO DEL CATÁLOGO DE NODOS ===");
+  console.log("=== INICIANDO MIGRACIÓN/RECONCILIACIÓN DEL CATÁLOGO DE NODOS ===");
 
   if (!esDBActiva()) {
     console.error("[ERROR] Las variables de Base de Datos (DATABASE_URL y DATABASE_KEY) no están configuradas en el archivo .env");
     process.exit(1);
   }
 
-  const client = obtenerClienteDB();
-  if (!client) {
-    console.error("[ERROR] No se pudo obtener el cliente de Base de Datos.");
-    process.exit(1);
-  }
-
   try {
-    console.log("[1/3] Conectando con Google Sheets para leer 'verificadores_nodo'...");
-    const doc = await obtenerHojaDeCalculo();
-    const hojaNodos = doc.sheetsByTitle["verificadores_nodo"];
+    const res = await sincronizarCatalogoDesdeSheets();
 
-    if (!hojaNodos) {
-      console.error("[ERROR] No se encontró la hoja 'verificadores_nodo' en Google Sheets.");
+    if (!res.exitoso) {
+      console.error("[ERROR] Falló la reconciliación del catálogo:", res.error || res.razon);
       process.exit(1);
     }
 
-    const filasNodos = await hojaNodos.getRows();
-    console.log(`[INFO] Se encontraron ${filasNodos.length} registros en el catálogo de Google Sheets.`);
-
-    const registrosInsertar = [];
-    for (const fila of filasNodos) {
-      const municipio = (fila.get("MUNICIPIO") || "").trim();
-      const nodo = parseInt(fila.get("NODO") || "0", 10);
-      const limite = parseInt(fila.get("CANTIDAD DE VERIFICADORES") || "0", 10);
-
-      if (municipio && nodo) {
-        registrosInsertar.push({
-          municipio,
-          municipio_normalizado: normalizarTexto(municipio),
-          nodo,
-          limite_verificadores: limite,
-        });
-      }
-    }
-
-    console.log(`[2/3] Insertando/Actualizando ${registrosInsertar.length} nodos en la Base de Datos...`);
-
-    const { data, error } = await client
-      .from("nodos_catalogo")
-      .upsert(registrosInsertar, { onConflict: "municipio_normalizado,nodo" })
-      .select();
-
-    if (error) {
-      console.error("[ERROR] Falló la inserción en la Base de Datos:", error.message);
-      process.exit(1);
-    }
-
-    console.log(`[3/3] ✅ ¡ÉXITO! Se poblaron ${data?.length || 0} nodos en la tabla 'nodos_catalogo'.`);
+    console.log(`✅ ¡ÉXITO! Se actualizaron ${res.sincronizados} nodos y se eliminaron ${res.eliminados || 0} nodos obsoletos en 'nodos_catalogo'.`);
     console.log("=== PROCESO FINALIZADO SATISFACTORIAMENTE ===");
   } catch (err) {
     console.error("[ERROR FATAL] Ocurrió un error no esperado:", err);
@@ -69,3 +30,4 @@ async function poblarCatalogo() {
 }
 
 poblarCatalogo();
+
