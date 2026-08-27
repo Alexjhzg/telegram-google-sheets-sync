@@ -304,17 +304,33 @@ export async function reconciliarCatalogoNodosDB(
   console.log(`[INFO] Detectados ${idsAEliminar.length} nodo(s) obsoleto(s) a eliminar en la Base de Datos...`);
 
   // 3. Eliminar los nodos obsoletos de Supabase
+  let eliminadosCount = 0;
   const { data: eliminadosData, error: deleteErr } = await client
     .from("nodos_catalogo")
     .delete()
     .in("id", idsAEliminar)
     .select();
 
-  let eliminadosCount = 0;
   if (deleteErr) {
-    console.warn("[ADVERTENCIA] No se pudieron eliminar algunos nodos obsoletos (posible reporte asociado FK):", deleteErr.message);
+    console.warn("[ADVERTENCIA] Falló borrado por lote de nodos obsoletos (posible FK). Intentando eliminación individual...", deleteErr.message);
+    // Fallback: Intentar borrar cada nodo individualmente para borrar todos los que no tengan restricción FK
+    for (const nodoObsoleto of nodosExistentes.filter((n) => idsAEliminar.includes(n.id))) {
+      const { error: errIndiv } = await client
+        .from("nodos_catalogo")
+        .delete()
+        .eq("id", nodoObsoleto.id);
+
+      if (errIndiv) {
+        console.warn(`[ADVERTENCIA] No se pudo eliminar el nodo ${nodoObsoleto.nodo} (${nodoObsoleto.municipio_normalizado}) de Supabase: tiene reportes históricos asociados (${errIndiv.message}).`);
+      } else {
+        eliminadosCount++;
+      }
+    }
   } else {
     eliminadosCount = eliminadosData?.length || idsAEliminar.length;
+  }
+
+  if (eliminadosCount > 0) {
     console.log(`[INFO] ${eliminadosCount} nodo(s) obsoleto(s) eliminado(s) exitosamente de la Base de Datos.`);
   }
 
