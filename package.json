@@ -9,7 +9,8 @@
     "build": "tsc --noEmit",
     "test": "tsx --test",
     "db:seed": "tsx scripts/seed_catalog.ts",
-    "sheets:setup": "tsx scripts/setup_reporte_diario.ts"
+    "sheets:setup": "tsx scripts/setup_reporte_diario.ts",
+    "sheets:standardize-dates": "tsx scripts/estandarizar_fechas_historico.ts"
   },
   "engines": {
     "node": ">=20.0.0"

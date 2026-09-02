@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS reportes_diarios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     municipio VARCHAR(150) NOT NULL,
     municipio_normalizado VARCHAR(150) NOT NULL,
-    -- FK simple al catálogo de nodos (reemplaza la FK compuesta original)
-    catalogo_nodo_id UUID NOT NULL,
+    -- FK simple al catálogo de nodos (nullable para permitir eliminación de nodos en el catálogo)
+    catalogo_nodo_id UUID,
     nodo INTEGER NOT NULL,
     fecha DATE NOT NULL,
     hora VARCHAR(20),
@@ -42,12 +42,12 @@ CREATE TABLE IF NOT EXISTS reportes_diarios (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT unq_nodo_fecha UNIQUE (nodo, fecha),
-    -- FK simple UUID → nodos_catalogo.id (panel relacional de Supabase compatible)
+    -- FK simple UUID → nodos_catalogo.id (ON DELETE SET NULL permite borrar nodos del catálogo)
     CONSTRAINT fk_reportes_catalogo_id
         FOREIGN KEY (catalogo_nodo_id)
         REFERENCES nodos_catalogo (id)
         ON UPDATE CASCADE
-        ON DELETE RESTRICT
+        ON DELETE SET NULL
     -- NOTA: La FK compuesta original (municipio_normalizado, nodo) fue eliminada
     --       en la migración migration_paso1.sql / migration_paso2.sql
 );

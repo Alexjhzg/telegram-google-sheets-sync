@@ -3,6 +3,7 @@ import { JWT } from "google-auth-library";
 import { config } from "../config/index.js";
 import { Mutex } from "../utils/mutex.js";
 import { HistorialAcumulado } from "../types/index.js";
+import { estandarizarFecha, obtenerFechaHoyEstandar } from "../utils/dateUtils.js";
 
 // Lock global para secuenciar todas las operaciones asíncronas sobre Google Sheets
 export const sheetsMutex = new Mutex();
@@ -35,6 +36,12 @@ export async function obtenerHojaDeCalculo(): Promise<GoogleSpreadsheet> {
   }
 
   docPromise = (async () => {
+    if (!config.google.spreadsheetId || !config.google.serviceAccountEmail || !config.google.privateKey) {
+      throw new Error(
+        "[FATAL] Faltan variables de entorno requeridas para Google Sheets (GOOGLE_SPREADSHEET_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY). Revisa tu archivo .env"
+      );
+    }
+
     console.log("[INFO] Conectando y autenticando con Google Sheets...");
     const auth = new JWT({
       email:  config.google.serviceAccountEmail,
@@ -133,12 +140,12 @@ export async function resetearFilasDeDiasAnteriores(doc: GoogleSpreadsheet): Pro
   if (!hoja) return 0;
   const filas = await hoja.getRows();
 
-  const opts: Intl.DateTimeFormatOptions = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
-  const hoyStr = new Date().toLocaleDateString("es-VE", opts);
+  const hoyStr = obtenerFechaHoyEstandar();
 
   const fechasAnteriores = new Set<string>();
   for (const fila of filas) {
-    const fechaFila = (fila.get(COLUMNAS.FECHA) || "").trim();
+    const rawFecha = (fila.get(COLUMNAS.FECHA) || "").trim();
+    const fechaFila = estandarizarFecha(rawFecha) || rawFecha;
     if (fechaFila && fechaFila !== hoyStr) {
       fechasAnteriores.add(fechaFila);
     }
@@ -151,7 +158,8 @@ export async function resetearFilasDeDiasAnteriores(doc: GoogleSpreadsheet): Pro
 
   let reseteadas = 0;
   for (const fila of filas) {
-    const fechaFila = (fila.get(COLUMNAS.FECHA) || "").trim();
+    const rawFecha = (fila.get(COLUMNAS.FECHA) || "").trim();
+    const fechaFila = estandarizarFecha(rawFecha) || rawFecha;
     if (fechaFila && fechaFila !== hoyStr) {
       const municipio = fila.get(COLUMNAS.MUNICIPIO);
       const nodo = fila.get(COLUMNAS.NODO);
@@ -179,12 +187,12 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
   if (!hojaPrincipal) return;
   const filas = await hojaPrincipal.getRows();
 
-  let fechaReporte = fechaEspecifica;
+  let fechaReporte = fechaEspecifica ? (estandarizarFecha(fechaEspecifica) || fechaEspecifica) : null;
   if (!fechaReporte) {
     for (const fila of filas) {
       const fVal = (fila.get(COLUMNAS.FECHA) || "").trim();
       if (fVal) {
-        fechaReporte = fVal;
+        fechaReporte = estandarizarFecha(fVal) || fVal;
         break;
       }
     }
@@ -224,7 +232,12 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
   }
 
   const filasHistoricas = await sheetHistorica.getRows();
-  const yaExiste = filasHistoricas.some(f => (f.get(COLUMNAS.FECHA) || "").trim() === fechaReporte);
+  const yaExiste = filasHistoricas.some(f => {
+    const rawF = (f.get(COLUMNAS.FECHA) || "").trim();
+    const stdF = estandarizarFecha(rawF) || rawF;
+    return stdF === fechaReporte;
+  });
+
   if (yaExiste) {
     console.log(`[INFO] Los registros del día ${fechaReporte} ya están en el histórico. Omitiendo para evitar duplicados.`);
     return;
@@ -232,7 +245,9 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
 
   const filasDatos = filas.map(f => {
     const obj = f.toObject();
-    const esDeFechaResguardo = (obj[COLUMNAS.FECHA] || "").trim() === fechaReporte;
+    const rawFilaFecha = (obj[COLUMNAS.FECHA] || "").trim();
+    const stdFilaFecha = estandarizarFecha(rawFilaFecha) || rawFilaFecha;
+    const esDeFechaResguardo = stdFilaFecha === fechaReporte;
 
     if (esDeFechaResguardo) {
       return {
@@ -242,7 +257,7 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
         [COLUMNAS.BLOQUE_1]: obj[COLUMNAS.BLOQUE_1] || "",
         [COLUMNAS.BLOQUE_2]: obj[COLUMNAS.BLOQUE_2] || "",
         [COLUMNAS.BLOQUE_3]: obj[COLUMNAS.BLOQUE_3] || "",
-        [COLUMNAS.FECHA]: obj[COLUMNAS.FECHA] || "",
+        [COLUMNAS.FECHA]: stdFilaFecha || fechaReporte,
         [COLUMNAS.HORA]: obj[COLUMNAS.HORA] || "",
         [COLUMNAS.REMITENTE]: obj[COLUMNAS.REMITENTE] || "",
         [COLUMNAS.ID_MENSAJE]: obj[COLUMNAS.ID_MENSAJE] || "",

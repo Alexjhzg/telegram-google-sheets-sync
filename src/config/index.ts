@@ -9,7 +9,13 @@ const REQUIRED_VARS = [
 
 for (const key of REQUIRED_VARS) {
   if (!process.env[key]) {
-    console.error(`[FATAL] La variable de entorno "${key}" no está definida. Abortando.`);
+    console.warn(`[ADVERTENCIA] La variable de entorno "${key}" no está definida en el entorno.`);
+  }
+}
+
+export function validarConfigBot(): void {
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.error(`[FATAL] La variable de entorno "TELEGRAM_BOT_TOKEN" no está definida. Imposible iniciar el bot de Telegram.`);
     process.exit(1);
   }
 }

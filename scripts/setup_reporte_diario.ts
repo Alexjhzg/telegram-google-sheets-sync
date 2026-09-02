@@ -83,7 +83,7 @@ async function configurarReportesNativos() {
       sheetReporte.getCell(rowIdx, 3).formula = `=ROUND(IFERROR(SUMIFS(registros_historicos_telegram!C:C, registros_historicos_telegram!A:A, A${numFila}, registros_historicos_telegram!B:B, B${numFila}, registros_historicos_telegram!G:G, G${numFila}), 0), 0)`;
       sheetReporte.getCell(rowIdx, 4).formula = `=ROUND(C${numFila}-D${numFila}, 0)`;
       sheetReporte.getCell(rowIdx, 5).formula = `=IF(D${numFila}>0, "S", IF(COUNTIFS(registros_historicos_telegram!B:B, B${numFila}, registros_historicos_telegram!G:G, G${numFila}, registros_historicos_telegram!J:J, "<>")>0, "S", "N"))`;
-      sheetReporte.getCell(rowIdx, 6).formula = `=IF(ISBLANK($I$1), TEXT(TODAY() - 1, "dd/mm/yyyy"), TEXT($I$1, "dd/mm/yyyy"))`;
+      sheetReporte.getCell(rowIdx, 6).formula = `=IF(ISBLANK($I$1), TEXT(TODAY() - 1, "dd/mm/yyyy"), IF(ISTEXT($I$1), $I$1, TEXT($I$1, "dd/mm/yyyy")))`;
     }
 
     // Fila TOTALES al final

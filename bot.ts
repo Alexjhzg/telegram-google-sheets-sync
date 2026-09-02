@@ -1,4 +1,4 @@
-import { config } from "./src/config/index.js";
+import { config, validarConfigBot } from "./src/config/index.js";
 import http from "node:http";
 import { Bot } from "grammy";
 import { registrarHandlers } from "./src/handlers/message.js";
@@ -13,6 +13,7 @@ import {
 } from "./src/services/sheets.business.js";
 import { sincronizarCatalogoDesdeSheets } from "./src/services/catalogService.js";
 
+validarConfigBot();
 const bot = new Bot(config.telegram.token);
 
 registrarHandlers(bot);

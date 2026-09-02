@@ -19,7 +19,7 @@ BEGIN
         FOREIGN KEY (catalogo_nodo_id)
         REFERENCES nodos_catalogo (id)
         ON UPDATE CASCADE
-        ON DELETE RESTRICT;
+        ON DELETE SET NULL;
 
         RAISE NOTICE 'FK fk_reportes_catalogo_id creada exitosamente.';
     ELSE
