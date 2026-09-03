@@ -101,19 +101,13 @@ function validarFechaValida(dia: number, mes: number, anio: number): boolean {
  * Obtiene la fecha actual en la zona horaria de la aplicación en formato DD/MM/YYYY.
  */
 export function obtenerFechaHoyEstandar(): string {
-  const opts: Intl.DateTimeFormatOptions = {
+  const date = new Date();
+  const formatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  };
-  const str = new Date().toLocaleDateString("es-VE", opts);
-  const match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(str);
-  if (match) {
-    const d = String(match[1]).padStart(2, "0");
-    const m = String(match[2]).padStart(2, "0");
-    const y = match[3];
-    return `${d}/${m}/${y}`;
-  }
-  return str;
+  });
+  return formatter.format(date);
 }
+

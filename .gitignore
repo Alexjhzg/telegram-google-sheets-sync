@@ -38,3 +38,13 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Scripts temporales de diagnóstico y mantenimiento puntual
+scripts/extraer_historico_diagnostico.ts
+scripts/inspeccionar_fechas.ts
+scripts/consultar_db_ayer.ts
+scripts/consolidar_historico_ayer.ts
+scripts/inspeccionar_sumifs.ts
+scripts/chequear_tipos.ts
+scripts/corregir_tipos_ayer.ts
+

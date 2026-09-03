@@ -46,12 +46,24 @@ export function parsearReporte(texto: string): (ReporteParseado & { bloque1: num
  * @param timestamp - Timestamp en segundos.
  */
 export function convertirTimestamp(timestamp: number): TiempoConvertido {
-  const fecha = new Date(timestamp * 1000);
-  const opts: Intl.DateTimeFormatOptions = { timeZone: config.app.timezone, hour12: false };
+  const dateObj = new Date(timestamp * 1000);
+  const formatterFecha = new Intl.DateTimeFormat("en-GB", {
+    timeZone: config.app.timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const formatterHora = new Intl.DateTimeFormat("es-VE", {
+    timeZone: config.app.timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 
   return {
-    fecha: fecha.toLocaleDateString("es-VE", { ...opts, year: "numeric", month: "2-digit", day: "2-digit" }),
-    hora:  fecha.toLocaleTimeString("es-VE", { ...opts, hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    fecha: formatterFecha.format(dateObj),
+    hora:  formatterHora.format(dateObj),
   };
 }
 
