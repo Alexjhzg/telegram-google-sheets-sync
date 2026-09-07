@@ -47,4 +47,15 @@ scripts/consolidar_historico_ayer.ts
 scripts/inspeccionar_sumifs.ts
 scripts/chequear_tipos.ts
 scripts/corregir_tipos_ayer.ts
+scripts/diagnosticar_nodo_16086.ts
+scripts/chequear_j16086.ts
+scripts/evaluar_f15.ts
+scripts/buscar_16086.ts
+scripts/evaluar_countifs_directo.ts
+scripts/evaluar_columna_j.ts
+scripts/probar_countifs.ts
+scripts/probar_clear_j.ts
+scripts/probar_formula_reporto.ts
+scripts/aplicar_formula_reporto.ts
+
 
