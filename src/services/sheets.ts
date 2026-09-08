@@ -232,11 +232,21 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
   }
 
   const filasHistoricas = await sheetHistorica.getRows();
-  const filasFechaActual = filasHistoricas.filter(f => {
+  let filasFechaActual = filasHistoricas.filter(f => {
     const rawF = (f.get(COLUMNAS.FECHA) || "").trim();
     const stdF = estandarizarFecha(rawF) || rawF;
     return stdF === fechaReporte;
   });
+
+  // Auto-limpieza de seguridad si existieran filas duplicadas (>46) para la misma fecha
+  if (filasFechaActual.length > 46) {
+    console.log(`[ADVERTENCIA] Detectadas ${filasFechaActual.length} filas en histórico para la fecha ${fechaReporte}. Limpiando filas duplicadas sobrantes...`);
+    const sobrantes = filasFechaActual.slice(46);
+    for (let i = sobrantes.length - 1; i >= 0; i--) {
+      await sobrantes[i].delete();
+    }
+    filasFechaActual = filasFechaActual.slice(0, 46);
+  }
 
   // Mapear datos desde la base de datos Supabase si está activa (fallback/fuente de verdad)
   const mapaDB = new Map<number, any>();
