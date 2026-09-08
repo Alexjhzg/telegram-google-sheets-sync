@@ -232,24 +232,158 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
   }
 
   const filasHistoricas = await sheetHistorica.getRows();
-  const yaExiste = filasHistoricas.some(f => {
+  const filasFechaActual = filasHistoricas.filter(f => {
     const rawF = (f.get(COLUMNAS.FECHA) || "").trim();
     const stdF = estandarizarFecha(rawF) || rawF;
     return stdF === fechaReporte;
   });
 
-  if (yaExiste) {
-    console.log(`[INFO] Los registros del día ${fechaReporte} ya están en el histórico. Omitiendo para evitar duplicados.`);
+  // Mapear datos desde la base de datos Supabase si está activa (fallback/fuente de verdad)
+  const mapaDB = new Map<number, any>();
+  try {
+    const dbModule = await import("./database.js");
+    if (dbModule.esDBActiva()) {
+      const client = dbModule.obtenerClienteDB();
+      if (client) {
+        const partes = fechaReporte.split("/");
+        const fechaIso = partes.length === 3 ? `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}` : fechaReporte;
+        const { data } = await client
+          .from("reportes_diarios")
+          .select("*")
+          .or(`fecha.eq.${fechaIso},fecha.eq.${fechaReporte}`);
+        if (data) {
+          data.forEach((r: any) => {
+            const nod = parseInt(String(r.nodo), 10);
+            if (nod > 0) mapaDB.set(nod, r);
+          });
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[ADVERTENCIA] No se pudo obtener la base de datos para resguardo histórico:", e.message);
+  }
+
+  // Mapear datos de la hoja principal en vivo
+  const mapaPrincipal = new Map<number, any>();
+  for (const f of filas) {
+    const obj = f.toObject();
+    const rawFilaFecha = (obj[COLUMNAS.FECHA] || "").trim();
+    const stdFilaFecha = estandarizarFecha(rawFilaFecha) || rawFilaFecha;
+    if (stdFilaFecha === fechaReporte) {
+      const nod = parseInt(obj[COLUMNAS.NODO] || "0", 10);
+      if (nod > 0) mapaPrincipal.set(nod, obj);
+    }
+  }
+
+  if (filasFechaActual.length > 0) {
+    console.log(`[INFO] Los registros del día ${fechaReporte} ya están en el histórico. Consolidando y actualizando celdas...`);
+
+    const minRowIndex = Math.min(...filasFechaActual.map(f => f.rowNumber - 1));
+    const maxRowIndex = Math.max(...filasFechaActual.map(f => f.rowNumber - 1));
+
+    await sheetHistorica.loadCells({
+      startRowIndex: minRowIndex,
+      endRowIndex: maxRowIndex + 1,
+      startColumnIndex: 0,
+      endColumnIndex: 12
+    });
+
+    await sheetHistorica.loadHeaderRow();
+    const headers = sheetHistorica.headerValues;
+    const colIdx = {
+      tot: headers.indexOf(COLUMNAS.TOTAL_VERIFICADORES),
+      b1: headers.indexOf(COLUMNAS.BLOQUE_1),
+      b2: headers.indexOf(COLUMNAS.BLOQUE_2),
+      b3: headers.indexOf(COLUMNAS.BLOQUE_3),
+      fecha: headers.indexOf(COLUMNAS.FECHA),
+      hora: headers.indexOf(COLUMNAS.HORA),
+      rem: headers.indexOf(COLUMNAS.REMITENTE),
+      msgId: headers.indexOf(COLUMNAS.ID_MENSAJE),
+      chatId: headers.indexOf(COLUMNAS.ID_CHAT),
+      estado: headers.indexOf(COLUMNAS.ESTADO),
+    };
+
+    let actualizados = 0;
+    for (const filaHist of filasFechaActual) {
+      const nod = parseInt(filaHist.get(COLUMNAS.NODO) || "0", 10);
+      const repDB = mapaDB.get(nod);
+      const datosPrincipal = mapaPrincipal.get(nod);
+
+      let total = 0, b1 = 0, b2 = 0, b3 = 0;
+      let hora = "", remitente = "", msgId = "", chatId = "", estado = "";
+      let tieneDatos = false;
+
+      if (repDB) {
+        total = Number(repDB.total_verificadores ?? 0);
+        b1 = Number(repDB.bloque_1 ?? 0);
+        b2 = Number(repDB.bloque_2 ?? 0);
+        b3 = Number(repDB.bloque_3 ?? 0);
+        hora = repDB.hora || "";
+        remitente = repDB.remitente || "";
+        msgId = repDB.telegram_message_id ? String(repDB.telegram_message_id) : "";
+        chatId = repDB.telegram_chat_id ? String(repDB.telegram_chat_id) : "";
+        estado = repDB.estado || "OK";
+        tieneDatos = true;
+      } else if (datosPrincipal && (Number(datosPrincipal[COLUMNAS.TOTAL_VERIFICADORES] || 0) > 0 || (datosPrincipal[COLUMNAS.ID_MENSAJE] || "") !== "")) {
+        total = Number(datosPrincipal[COLUMNAS.TOTAL_VERIFICADORES] || 0);
+        b1 = Number(datosPrincipal[COLUMNAS.BLOQUE_1] || 0);
+        b2 = Number(datosPrincipal[COLUMNAS.BLOQUE_2] || 0);
+        b3 = Number(datosPrincipal[COLUMNAS.BLOQUE_3] || 0);
+        hora = datosPrincipal[COLUMNAS.HORA] || "";
+        remitente = datosPrincipal[COLUMNAS.REMITENTE] || "";
+        msgId = datosPrincipal[COLUMNAS.ID_MENSAJE] || "";
+        chatId = datosPrincipal[COLUMNAS.ID_CHAT] || "";
+        estado = datosPrincipal[COLUMNAS.ESTADO] || "OK";
+        tieneDatos = true;
+      }
+
+      if (tieneDatos) {
+        const rowIndex = filaHist.rowNumber - 1;
+        if (colIdx.tot >= 0) sheetHistorica.getCell(rowIndex, colIdx.tot).value = total;
+        if (colIdx.b1 >= 0) sheetHistorica.getCell(rowIndex, colIdx.b1).value = b1;
+        if (colIdx.b2 >= 0) sheetHistorica.getCell(rowIndex, colIdx.b2).value = b2;
+        if (colIdx.b3 >= 0) sheetHistorica.getCell(rowIndex, colIdx.b3).value = b3;
+        if (colIdx.fecha >= 0) sheetHistorica.getCell(rowIndex, colIdx.fecha).value = fechaReporte;
+        if (colIdx.hora >= 0) sheetHistorica.getCell(rowIndex, colIdx.hora).value = hora;
+        if (colIdx.rem >= 0) sheetHistorica.getCell(rowIndex, colIdx.rem).value = remitente;
+        if (colIdx.msgId >= 0) sheetHistorica.getCell(rowIndex, colIdx.msgId).value = msgId;
+        if (colIdx.chatId >= 0) sheetHistorica.getCell(rowIndex, colIdx.chatId).value = chatId;
+        if (colIdx.estado >= 0) sheetHistorica.getCell(rowIndex, colIdx.estado).value = estado;
+        actualizados++;
+      }
+    }
+
+    if (actualizados > 0) {
+      await sheetHistorica.saveUpdatedCells();
+      console.log(`[INFO] Histórico del día ${fechaReporte} actualizado con éxito (${actualizados} nodos actualizados).`);
+    }
     return;
   }
 
   const filasDatos = filas.map(f => {
     const obj = f.toObject();
+    const nod = parseInt(obj[COLUMNAS.NODO] || "0", 10);
+    const repDB = mapaDB.get(nod);
     const rawFilaFecha = (obj[COLUMNAS.FECHA] || "").trim();
     const stdFilaFecha = estandarizarFecha(rawFilaFecha) || rawFilaFecha;
     const esDeFechaResguardo = stdFilaFecha === fechaReporte;
 
-    if (esDeFechaResguardo) {
+    if (repDB) {
+      return {
+        [COLUMNAS.MUNICIPIO]: obj[COLUMNAS.MUNICIPIO] || "",
+        [COLUMNAS.NODO]: obj[COLUMNAS.NODO] || "",
+        [COLUMNAS.TOTAL_VERIFICADORES]: repDB.total_verificadores ?? 0,
+        [COLUMNAS.BLOQUE_1]: repDB.bloque_1 ?? 0,
+        [COLUMNAS.BLOQUE_2]: repDB.bloque_2 ?? 0,
+        [COLUMNAS.BLOQUE_3]: repDB.bloque_3 ?? 0,
+        [COLUMNAS.FECHA]: fechaReporte,
+        [COLUMNAS.HORA]: repDB.hora || "",
+        [COLUMNAS.REMITENTE]: repDB.remitente || "",
+        [COLUMNAS.ID_MENSAJE]: repDB.telegram_message_id ? String(repDB.telegram_message_id) : "",
+        [COLUMNAS.ID_CHAT]: repDB.telegram_chat_id ? String(repDB.telegram_chat_id) : "",
+        [COLUMNAS.ESTADO]: repDB.estado || "OK"
+      };
+    } else if (esDeFechaResguardo) {
       return {
         [COLUMNAS.MUNICIPIO]: obj[COLUMNAS.MUNICIPIO] || "",
         [COLUMNAS.NODO]: obj[COLUMNAS.NODO] || "",
