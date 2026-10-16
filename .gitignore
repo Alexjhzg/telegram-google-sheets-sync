@@ -12,6 +12,7 @@ node_modules/
 *.json
 !package.json
 !package-lock.json
+!tsconfig.json
 
 # Archivos de logs de NPM / Node
 npm-debug.log*

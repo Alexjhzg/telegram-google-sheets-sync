@@ -53,7 +53,10 @@ export async function obtenerHojaDeCalculo(): Promise<GoogleSpreadsheet> {
     await doc.loadInfo();
     console.log("[INFO] Conexión con Google Sheets establecida con éxito.");
     return doc;
-  })();
+  })().catch((err) => {
+    docPromise = null;
+    throw err;
+  });
 
   return docPromise;
 }
