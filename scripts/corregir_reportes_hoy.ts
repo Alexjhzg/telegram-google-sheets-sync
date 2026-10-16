@@ -4,26 +4,115 @@ import { esDBActiva, guardarOActualizarReporteDB } from "../src/services/databas
 export interface ReporteAjuste {
   municipio: string;
   nodo: number;
-  b1?: number;
-  b2?: number;
-  b3?: number;
-  total?: number;
-  hora?: string;
-  remitente?: string;
+  b1: number;
+  b2: number;
+  b3: number;
+  total: number;
+  hora: string;
+  remitente: string;
 }
 
-/**
- * Corrige o inserta reportes en la hoja principal 'registros_telegram'
- * para la fecha de hoy, ideal para subsanar caídas del servidor.
- */
-export async function aplicarAjusteReportesHoy(reportes: ReporteAjuste[], fechaManual?: string) {
-  const opts: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
-  const fechaHoy = fechaManual || new Date().toLocaleDateString("es-VE", opts);
+// Lista de los 9 reportes del 16/10/2026 recuperados del chat de Telegram
+export const REPORTES_RECUPERADOS: ReporteAjuste[] = [
+  {
+    municipio: "Caripe",
+    nodo: 16044,
+    b1: 0,
+    b2: 0,
+    b3: 1,
+    total: 1,
+    hora: "16:05",
+    remitente: "Yonlis",
+  },
+  {
+    municipio: "Piar",
+    nodo: 16022,
+    b1: 0,
+    b2: 0,
+    b3: 0,
+    total: 0,
+    hora: "16:55",
+    remitente: "Ruth Bronis",
+  },
+  {
+    municipio: "Maturin",
+    nodo: 16115,
+    b1: 0,
+    b2: 2,
+    b3: 1,
+    total: 3,
+    hora: "17:18",
+    remitente: "JesusZM_",
+  },
+  {
+    municipio: "Libertador",
+    nodo: 16023,
+    b1: 0,
+    b2: 0,
+    b3: 1,
+    total: 1,
+    hora: "17:25",
+    remitente: "R.A Ore y.",
+  },
+  {
+    municipio: "Maturin",
+    nodo: 16073,
+    b1: 0,
+    b2: 0,
+    b3: 2,
+    total: 2,
+    hora: "17:30",
+    remitente: "Maria Mallerlin López",
+  },
+  {
+    municipio: "Bolívar",
+    nodo: 16102,
+    b1: 0,
+    b2: 0,
+    b3: 1,
+    total: 1,
+    hora: "17:30",
+    remitente: "Salvy",
+  },
+  {
+    municipio: "Piar",
+    nodo: 16009,
+    b1: 0,
+    b2: 0,
+    b3: 4,
+    total: 4,
+    hora: "17:35",
+    remitente: "Rosa Carrillo",
+  },
+  {
+    municipio: "Maturin",
+    nodo: 16017,
+    b1: 0,
+    b2: 0,
+    b3: 3,
+    total: 3,
+    hora: "17:37",
+    remitente: "Yuris Sanchez",
+  },
+  {
+    municipio: "Maturin",
+    nodo: 16061,
+    b1: 0,
+    b2: 0,
+    b3: 3,
+    total: 3,
+    hora: "17:54",
+    remitente: "Ronnys Montilla",
+  },
+];
 
-  console.log(`[AJUSTE] Aplicando corrección para la fecha: ${fechaHoy}`);
-  console.log(`[AJUSTE] Cantidad de nodos a procesar: ${reportes.length}`);
+async function ejecutar() {
+  const fechaHoy = "16/10/2026";
+  console.log(`========================================================`);
+  console.log(` APLICANDO AJUSTE DE REPORTES RECUPERADOS (${fechaHoy})`);
+  console.log(`========================================================\n`);
 
-  return sheetsMutex.runExclusive(async () => {
+  await sheetsMutex.runExclusive(async () => {
     const doc = await obtenerHojaDeCalculo();
     const hoja = doc.sheetsByTitle["registros_telegram"];
     if (!hoja) throw new Error("No se encontró la pestaña 'registros_telegram'.");
@@ -32,7 +121,7 @@ export async function aplicarAjusteReportesHoy(reportes: ReporteAjuste[], fechaM
     let actualizados = 0;
     let noEncontrados = 0;
 
-    for (const rep of reportes) {
+    for (const rep of REPORTES_RECUPERADOS) {
       const fila = buscarFilaPorNodo(filas, rep.municipio, rep.nodo);
       if (!fila) {
         console.warn(`[ADVERTENCIA] No se encontró fila fija para Municipio: ${rep.municipio}, Nodo: ${rep.nodo}`);
@@ -40,30 +129,19 @@ export async function aplicarAjusteReportesHoy(reportes: ReporteAjuste[], fechaM
         continue;
       }
 
-      const prevB1 = parseInt(fila.get(COLUMNAS.BLOQUE_1) || "0", 10);
-      const prevB2 = parseInt(fila.get(COLUMNAS.BLOQUE_2) || "0", 10);
-      const prevB3 = parseInt(fila.get(COLUMNAS.BLOQUE_3) || "0", 10);
-
-      const nuevoB1 = rep.b1 !== undefined ? rep.b1 : prevB1;
-      const nuevoB2 = rep.b2 !== undefined ? rep.b2 : prevB2;
-      const nuevoB3 = rep.b3 !== undefined ? rep.b3 : prevB3;
-      const nuevoTotal = rep.total !== undefined ? rep.total : (nuevoB1 + nuevoB2 + nuevoB3);
-      const horaStr = rep.hora || "18:00";
-      const remitenteStr = rep.remitente || fila.get(COLUMNAS.REMITENTE) || "Ajuste Manual";
-
-      fila.set(COLUMNAS.BLOQUE_1, nuevoB1);
-      fila.set(COLUMNAS.BLOQUE_2, nuevoB2);
-      fila.set(COLUMNAS.BLOQUE_3, nuevoB3);
-      fila.set(COLUMNAS.TOTAL_VERIFICADORES, nuevoTotal);
+      fila.set(COLUMNAS.BLOQUE_1, rep.b1);
+      fila.set(COLUMNAS.BLOQUE_2, rep.b2);
+      fila.set(COLUMNAS.BLOQUE_3, rep.b3);
+      fila.set(COLUMNAS.TOTAL_VERIFICADORES, rep.total);
       fila.set(COLUMNAS.FECHA, fechaHoy);
-      fila.set(COLUMNAS.HORA, horaStr);
-      fila.set(COLUMNAS.REMITENTE, remitenteStr);
+      fila.set(COLUMNAS.HORA, rep.hora);
+      fila.set(COLUMNAS.REMITENTE, rep.remitente);
       fila.set(COLUMNAS.ESTADO, "OK");
 
       await fila.save();
       actualizados++;
 
-      console.log(`[OK] Nodo ${rep.nodo} (${rep.municipio}) actualizado: B1=${nuevoB1}, B2=${nuevoB2}, B3=${nuevoB3}, Total=${nuevoTotal}`);
+      console.log(`[OK] Nodo ${rep.nodo} (${rep.municipio}) actualizado: B1=${rep.b1}, B2=${rep.b2}, B3=${rep.b3}, Total=${rep.total}`);
 
       if (esDBActiva()) {
         try {
@@ -71,24 +149,31 @@ export async function aplicarAjusteReportesHoy(reportes: ReporteAjuste[], fechaM
             municipioOficial: rep.municipio,
             nodo: rep.nodo,
             fecha: fechaHoy,
-            hora: horaStr,
-            b1Final: nuevoB1,
-            b2Final: nuevoB2,
-            b3Final: nuevoB3,
-            totalFinal: nuevoTotal,
-            remitente: remitenteStr,
+            hora: rep.hora,
+            b1Final: rep.b1,
+            b2Final: rep.b2,
+            b3Final: rep.b3,
+            totalFinal: rep.total,
+            remitente: rep.remitente,
             messageId: 0,
             chatId: 0,
           });
         } catch (dbErr: any) {
-          console.error(`[ERROR DB] No se pudo sincronizar en PostgreSQL nodo ${rep.nodo}:`, dbErr.message);
+          console.error(`[ERROR DB] No se pudo guardar en DB nodo ${rep.nodo}:`, dbErr.message);
         }
       }
     }
 
-    console.log(`\n=== RESUMEN DE AJUSTE ===`);
-    console.log(`Total procesados: ${reportes.length}`);
-    console.log(`Actualizados con éxito: ${actualizados}`);
-    console.log(`No encontrados: ${noEncontrados}`);
+    console.log(`\n========================================================`);
+    console.log(`RESUMEN: ${actualizados} nodos actualizados exitosamente en Google Sheets.`);
+    if (noEncontrados > 0) {
+      console.log(`ALERTAS: ${noEncontrados} nodos no se encontraron en la hoja.`);
+    }
+    console.log(`========================================================`);
   });
 }
+
+ejecutar().catch((err) => {
+  console.error("[FATAL] Error ejecutando la corrección de reportes:", err);
+  process.exit(1);
+});

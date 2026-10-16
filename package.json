@@ -10,7 +10,8 @@
     "test": "tsx --test",
     "db:seed": "tsx scripts/seed_catalog.ts",
     "sheets:setup": "tsx scripts/setup_reporte_diario.ts",
-    "sheets:standardize-dates": "tsx scripts/estandarizar_fechas_historico.ts"
+    "sheets:standardize-dates": "tsx scripts/estandarizar_fechas_historico.ts",
+    "corregir:hoy": "tsx scripts/corregir_reportes_hoy.ts"
   },
   "engines": {
     "node": ">=20.0.0"
