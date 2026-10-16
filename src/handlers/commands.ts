@@ -149,7 +149,7 @@ export function registrarComandos(bot: Bot): void {
 
       const nowVE = Math.floor(Date.now() / 1000);
       const { minutosDelDia } = obtenerBloqueYHoraActivo(nowVE);
-      const horarioLaboral = (minutosDelDia >= 360 && minutosDelDia <= 1080)
+      const horarioLaboral = (minutosDelDia >= 360 && minutosDelDia <= 1350)
         ? "🟢 Abierto (Recibiendo reportes)"
         : "🔴 Cerrado (Bloqueo activo)";
 

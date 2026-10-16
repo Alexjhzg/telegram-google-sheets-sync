@@ -66,7 +66,9 @@ export function registrarHandlers(bot: Bot): void {
     }
 
     const { minutosDelDia, horaStr } = obtenerBloqueYHoraActivo(timestampEfectivo);
-    if (minutosDelDia < 360 || minutosDelDia > 1080) {
+    // Se permite recibir reportes entre 06:00 AM (360) y 10:30 PM (1350 min)
+    // para procesar reportes rezagados o demorados por cortes/caídas de servidor antes del resguardo de las 11:00 PM
+    if (minutosDelDia < 360 || minutosDelDia > 1350) {
       console.log(`[INFO] Acción recibida fuera de jornada laboral (${horaStr} VET). Ignorando silenciosamente.`);
       return;
     }
