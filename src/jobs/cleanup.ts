@@ -39,15 +39,15 @@ export function esHorarioLaboral(): boolean {
   if (hour === 24) hour = 0;
 
   const currentMinutes = hour * 60 + minute;
-  const startMinutes = (config.app.workStartHour ?? 7) * 60;
-  const endMinutes = (config.app.workEndHour ?? 18) * 60 + (config.app.workEndMinute ?? 30);
+  const startMinutes = (config.app.workStartHour ?? 6) * 60 + (config.app.workStartMinute ?? 0);
+  const endMinutes = (config.app.cleanupEndHour ?? 18) * 60 + (config.app.cleanupEndMinute ?? 30);
 
   return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
 }
 
 export async function ejecutarLimpieza(api: Api, limiteFilas: number = 15, force: boolean = false): Promise<void> {
   if (!force && !esHorarioLaboral()) {
-    console.log("[INFO] Limpieza periódica en pausa (fuera del horario laboral 07:00 - 18:30 VET).");
+    console.log("[INFO] Limpieza periódica en pausa (fuera del horario laboral de monitoreo).");
     return;
   }
 

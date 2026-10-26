@@ -84,22 +84,28 @@ export function obtenerBloqueYHoraActivo(timestamp: number): BloqueInfo {
   const hourPart = parts.find((p) => p.type === "hour");
   const minutePart = parts.find((p) => p.type === "minute");
 
-  const hourVE = hourPart ? parseInt(hourPart.value, 10) : 0;
+  let hourVE = hourPart ? parseInt(hourPart.value, 10) : 0;
+  if (hourVE === 24) hourVE = 0;
   const minuteVE = minutePart ? parseInt(minutePart.value, 10) : 0;
 
   const minutosDelDia = hourVE * 60 + minuteVE;
 
+  const startMin = (config.app.workStartHour ?? 6) * 60 + (config.app.workStartMinute ?? 0);
+  const endMin = (config.app.workEndHour ?? 18) * 60 + (config.app.workEndMinute ?? 0);
+
   let bloqueActivo: number;
-  if (minutosDelDia >= 360 && minutosDelDia <= 540) {
+  if (minutosDelDia >= startMin && minutosDelDia <= 540) {
     bloqueActivo = 1;
   } else if (minutosDelDia > 540 && minutosDelDia <= 840) {
     bloqueActivo = 2;
-  } else {
+  } else if (minutosDelDia > 840 && minutosDelDia <= endMin) {
     bloqueActivo = 3;
+  } else {
+    bloqueActivo = 0;
   }
 
   const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
-  const bloqueStr = bloqueActivo === 1 ? "9am" : bloqueActivo === 2 ? "2pm" : "6pm";
+  const bloqueStr = bloqueActivo === 1 ? "9am" : bloqueActivo === 2 ? "2pm" : bloqueActivo === 3 ? "6pm" : "Cerrado";
 
   return { horaStr, bloqueActivo, bloqueStr, minutosDelDia };
 }

@@ -58,18 +58,62 @@ export function registrarHandlers(bot: Bot): void {
     let timestampEfectivo = creationTimestamp;
 
     if (esEdicion && editTimestamp) {
-      const diffMins = (editTimestamp - creationTimestamp) / 60;
-      const holgura = config.app.reportEditGracePeriodMins;
-      if (diffMins > holgura) {
+      // Si la edición se realizó cuando el bloque ya está cerrado (después de 18:00),
+      // forzar timestampEfectivo a la hora de edición para que no use la holgura del pasado.
+      const infoEdicion = obtenerBloqueYHoraActivo(editTimestamp);
+      if (infoEdicion.bloqueActivo === 0) {
         timestampEfectivo = editTimestamp;
+      } else {
+        const diffMins = (editTimestamp - creationTimestamp) / 60;
+        const holgura = config.app.reportEditGracePeriodMins;
+        if (diffMins > holgura) {
+          timestampEfectivo = editTimestamp;
+        }
       }
     }
 
-    const { minutosDelDia, horaStr } = obtenerBloqueYHoraActivo(timestampEfectivo);
-    // Se permite recibir reportes entre 06:00 AM (360) y 10:30 PM (1350 min)
-    // para procesar reportes rezagados o demorados por cortes/caídas de servidor antes del resguardo de las 11:00 PM
-    if (minutosDelDia < 360 || minutosDelDia > 1350) {
-      console.log(`[INFO] Acción recibida fuera de jornada laboral (${horaStr} VET). Ignorando silenciosamente.`);
+    const { minutosDelDia, horaStr, bloqueActivo } = obtenerBloqueYHoraActivo(timestampEfectivo);
+
+    // Verificar también la hora real de recepción del mensaje
+    const nowTimestamp = Math.floor(Date.now() / 1000);
+    const infoAhora = obtenerBloqueYHoraActivo(nowTimestamp);
+
+    const fueraDeJornada = bloqueActivo === 0 || infoAhora.bloqueActivo === 0;
+
+    const esComandoEliminar = REGEX_ELIMINAR.test(texto);
+    const esReporte = texto.toLowerCase().includes(config.app.reportKeyword.toLowerCase()) ||
+      (/(?:Municipio|municipio)\*?\s*:/i.test(texto) && /(?:Nodo|nodo)\*?\s*:/i.test(texto));
+
+    if (fueraDeJornada) {
+      if (esReporte || esComandoEliminar) {
+        console.log(`[INFO] Reporte o acción recibida fuera de jornada laboral (${horaStr} VET). Rechazando con alerta.`);
+        await reaccionar(ctx, "👎");
+        const tipoAccion = esEdicion ? "Edición rechazada" : "Reporte rechazado";
+        const startTotalMin = (config.app.workStartHour ?? 6) * 60 + (config.app.workStartMinute ?? 0);
+        let detalleHorario = "";
+        if (infoAhora.minutosDelDia < startTotalMin) {
+          detalleHorario = `La recepción de reportes de hoy inicia a las 06:00 AM VET. Por favor, envía tu reporte a partir de las 06:00 AM.`;
+        } else {
+          detalleHorario = `La jornada laboral de hoy finalizó a las 06:00 PM VET. El corte de las 6:00 pm ya fue consolidado y enviado a Gerencia. No se admiten nuevos reportes ni modificaciones hasta la siguiente jornada laboral (06:00 AM).`;
+        }
+
+        const mensajeFuera =
+          `⚠️ *${tipoAccion}: Fuera de jornada laboral*\n\n` +
+          `Hola *${remitente}*, ${detalleHorario}\n\n` +
+          `• *Horario de recepción:* 06:00 AM – 06:00 PM VET.\n` +
+          `• *Hora actual:* \`${infoAhora.horaStr}\` VET.`;
+
+        try {
+          await ctx.reply(mensajeFuera, {
+            parse_mode: "Markdown",
+            reply_parameters: { message_id: messageId }
+          });
+        } catch (err: any) {
+          console.error("[ERROR] No se pudo enviar el mensaje de rechazo fuera de jornada:", err.message);
+        }
+      } else {
+        console.log(`[INFO] Mensaje general recibido fuera de jornada laboral (${horaStr} VET). Ignorando silenciosamente.`);
+      }
       return;
     }
 
@@ -155,7 +199,13 @@ export function registrarHandlers(bot: Bot): void {
 
         let mensajeRespuesta = "";
 
-        if (resultado.razon === "MUNICIPIO_INCORRECTO") {
+        if (resultado.razon === "FUERA_DE_HORARIO") {
+          mensajeRespuesta =
+            `⚠️ *Reporte Rechazado: Fuera de jornada laboral*\n\n` +
+            `Hola *${remitente}*, la jornada laboral de hoy ha finalizado (horario de atención: 06:00 AM a 06:00 PM VET).\n\n` +
+            `• *Hora registrada:* \`${horaStr}\` VET\n\n` +
+            `👉 El corte de las 6:00 pm ya fue consolidado y enviado a Gerencia. No se aceptan más reportes por hoy.`;
+        } else if (resultado.razon === "MUNICIPIO_INCORRECTO") {
           mensajeRespuesta =
             `⚠️ *Reporte Rechazado: Municipio no reconocido*\n\n` +
             `Hola *${remitente}*, el municipio *${resultado.municipioParseado}* no se encuentra registrado en la base de datos oficial.\n\n` +

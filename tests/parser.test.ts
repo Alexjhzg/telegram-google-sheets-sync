@@ -37,4 +37,23 @@ test("parser - obtenerBloqueYHoraActivo determina correctamente bloques según h
   const info11am = obtenerBloqueYHoraActivo(timestamp11am);
   assert.equal(info11am.bloqueActivo, 2);
   assert.equal(info11am.bloqueStr, "2pm");
+
+  // 4:00 PM VET (20:00 UTC) -> Bloque 3 (6pm)
+  const timestamp4pm = Math.floor(new Date("2026-08-14T20:00:00Z").getTime() / 1000);
+  const info4pm = obtenerBloqueYHoraActivo(timestamp4pm);
+  assert.equal(info4pm.bloqueActivo, 3);
+  assert.equal(info4pm.bloqueStr, "6pm");
+
+  // 6:01 PM VET (22:01 UTC) -> Cerrado (fuera de jornada)
+  const timestamp601pm = Math.floor(new Date("2026-08-14T22:01:00Z").getTime() / 1000);
+  const info601pm = obtenerBloqueYHoraActivo(timestamp601pm);
+  assert.equal(info601pm.bloqueActivo, 0);
+  assert.equal(info601pm.bloqueStr, "Cerrado");
+
+  // 5:30 AM VET (09:30 UTC) -> Cerrado (antes de iniciar jornada)
+  const timestamp530am = Math.floor(new Date("2026-08-14T09:30:00Z").getTime() / 1000);
+  const info530am = obtenerBloqueYHoraActivo(timestamp530am);
+  assert.equal(info530am.bloqueActivo, 0);
+  assert.equal(info530am.bloqueStr, "Cerrado");
 });
+

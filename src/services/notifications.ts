@@ -23,13 +23,13 @@ export async function enviarAvisoCierre(api: Api, corte: number): Promise<void> 
   try {
     const MENSAJES_CIERRE: Record<number, string> = {
       1: `🔴 *Corte de las 9:00 am CERRADO*\n` +
-         `🟢 *Bloque de las 2:00 pm ACTIVO*\n\n` +
-         `Cualquier dato recibido de ahora en adelante se debe asignar al bloque de las 2pm y 6pm.`,
+        `🟢 *Bloque de las 2:00 pm ACTIVO*\n\n` +
+        `Cualquier dato recibido de ahora en adelante se debe asignar al bloque de las 2pm y 6pm.`,
       2: `🔴 *Corte de las 2:00 pm CERRADO*\n` +
-         `🟢 *Bloque de las 6:00 pm ACTIVO*\n\n` +
-         `Cualquier dato recibido de ahora en adelante se asignará al bloque de las 6pm.`,
+        `🟢 *Bloque de las 6:00 pm ACTIVO*\n\n` +
+        `Cualquier dato recibido de ahora en adelante se asignará al bloque de las 6pm.`,
       3: `🔴 *Corte de las 6:00 pm CERRADO*\n` +
-         `🏁 *Cierre de jornada de hoy completado*`,
+        `🏁 *Cierre de jornada de hoy completado*`,
     };
 
     const mensaje = MENSAJES_CIERRE[corte];
@@ -134,7 +134,7 @@ export async function enviarAvisoNodosFaltantes(api: Api): Promise<void> {
     }
 
     let mensaje = "⚠️ *NODOS SIN REPORTE REGISTRADO HOY*\n\n" +
-                  "Municipios y sus respectivos nodos sin actividad:\n\n";
+      "Municipios y sus respectivos nodos sin actividad:\n\n";
 
     const municipiosOrdenados = Object.keys(faltantesPorMunicipio).sort((a, b) => a.localeCompare(b));
     for (const municipio of municipiosOrdenados) {

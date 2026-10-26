@@ -112,6 +112,20 @@ export async function procesarYGuardarReporte({
 
   const doc = await obtenerHojaDeCalculo();
 
+  if (bloqueActivo === 0) {
+    console.warn(`[ADVERTENCIA] Reporte rechazado: hora ${horaStr} VET fuera de jornada laboral.`);
+    if (esEdicion) {
+      await marcarFilaParaRevision(doc, messageId);
+    }
+    return {
+      valido: false,
+      razon: "FUERA_DE_HORARIO",
+      municipioOficial: municipio,
+      municipioParseado: municipio,
+      nodoParseado: nodo,
+    };
+  }
+
   let validacion: ValidacionResultado;
   if (esDBActiva()) {
     try {

@@ -65,18 +65,18 @@ export async function obtenerConsolidadoGeneral(doc: GoogleSpreadsheet, corte: n
   };
 
   const limite = parseVal(filaTotal.get("CANT. DE VERIFICADORES"));
-  const v9am   = parseVal(filaTotal.get("9:00 a. m."));
-  const v2pm   = parseVal(filaTotal.get("2:00 p. m."));
-  const v6pm   = parseVal(filaTotal.get("6:00 p. m."));
+  const v9am = parseVal(filaTotal.get("9:00 a. m."));
+  const v2pm = parseVal(filaTotal.get("2:00 p. m."));
+  const v6pm = parseVal(filaTotal.get("6:00 p. m."));
   const vTotal = parseVal(filaTotal.get("TOTAL"));
 
   if (limite === 0) {
     throw new Error("El límite total de verificadores en la hoja es 0.");
   }
 
-  const pct9am   = ((v9am / limite) * 100).toFixed(2).replace(".", ",");
-  const pct2pm   = ((v2pm / limite) * 100).toFixed(2).replace(".", ",");
-  const pct6pm   = ((v6pm / limite) * 100).toFixed(2).replace(".", ",");
+  const pct9am = ((v9am / limite) * 100).toFixed(2).replace(".", ",");
+  const pct2pm = ((v2pm / limite) * 100).toFixed(2).replace(".", ",");
+  const pct6pm = ((v6pm / limite) * 100).toFixed(2).replace(".", ",");
 
   const linea9am = corte >= 1 ? `9:00 am ${v9am}/${limite} = ${pct9am}%` : `9:00 am`;
   const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm`;
@@ -295,7 +295,7 @@ export async function enviarReporteDiario(api: Api, corte: number = 3): Promise<
         console.log(`[INFO] Enviando resumen de porcentajes a Gerencia (Chat ID: ${managerId})`);
         try {
           await api.sendMessage(managerId, mensajeConsolidado, { parse_mode: "Markdown" });
-          
+
           if (corte === 3) {
             await api.sendMessage(managerId, mensajeDesglose, { parse_mode: "Markdown" });
             await api.sendMessage(managerId, mensajeLeyenda, { parse_mode: "Markdown" });
