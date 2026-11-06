@@ -1,6 +1,7 @@
 import { Cron } from "croner";
 import { Api } from "grammy";
 import { config } from "../config/index.js";
+import { ejecutarConReintento } from "../utils/retry.js";
 import {
   obtenerHojaDeCalculo,
   COLUMNAS,
@@ -54,50 +55,76 @@ export async function ejecutarLimpieza(api: Api, limiteFilas: number = 15, force
   return sheetsMutex.runExclusive(async () => {
     console.log(`[INFO] Iniciando limpieza de mensajes eliminados en Telegram (límite: ${limiteFilas} filas)...`);
     try {
-      const doc   = await obtenerHojaDeCalculo();
-      const hoja  = doc.sheetsByTitle["registros_telegram"];
+      const doc = await obtenerHojaDeCalculo();
+      const hoja = doc.sheetsByTitle["registros_telegram"];
       if (!hoja) return;
-      const filas = await hoja.getRows();
+
+      const filas = await ejecutarConReintento(
+        () => hoja.getRows(),
+        { contexto: "Lectura de filas en ejecutarLimpieza", maxIntentos: 3, retrasoBaseMs: 300 }
+      );
 
       let eliminados = 0;
       let analizados = 0;
+      let fallosFila = 0;
 
       for (let i = filas.length - 1; i >= 0; i--) {
-        const fila      = filas[i];
-        const obj       = fila.toObject();
-        const messageId = parseInt(obj[COLUMNAS.ID_MENSAJE], 10);
-        const chatId    = parseInt(obj[COLUMNAS.ID_CHAT], 10);
+        const fila = filas[i];
+        let messageId = 0;
+        let chatId = 0;
 
-        if (isNaN(messageId) || isNaN(chatId)) continue;
+        try {
+          const obj = fila.toObject();
+          messageId = parseInt(obj[COLUMNAS.ID_MENSAJE], 10);
+          chatId    = parseInt(obj[COLUMNAS.ID_CHAT], 10);
 
-        analizados++;
-        if (analizados > limiteFilas) {
-          console.log(`[INFO] Se alcanzó el límite de seguridad de ${limiteFilas} filas analizadas. Finalizando escaneo.`);
-          break;
-        }
+          if (isNaN(messageId) || isNaN(chatId)) continue;
 
-        const estado = obj[COLUMNAS.ESTADO] || "";
-        let debeBorrarse = false;
+          analizados++;
+          if (analizados > limiteFilas) {
+            console.log(`[INFO] Se alcanzó el límite de seguridad de ${limiteFilas} filas analizadas. Finalizando escaneo.`);
+            break;
+          }
 
-        if (typeof estado === "string" && estado.startsWith("Revisión desde:")) {
-          const timestampRevision = new Date(estado.replace("Revisión desde:", "").trim()).getTime();
-          if (!isNaN(timestampRevision)) {
-            const transcurridoMins = (Date.now() - timestampRevision) / 1000 / 60;
-            if (transcurridoMins >= 5) {
-              console.log(`[INFO] Fila en REVISIÓN superó el tiempo de gracia de 5 min (${Math.round(transcurridoMins)} min). Reseteando...`);
-              debeBorrarse = true;
+          const estado = obj[COLUMNAS.ESTADO] || "";
+          let debeBorrarse = false;
+
+          if (typeof estado === "string" && estado.startsWith("Revisión desde:")) {
+            const timestampRevision = new Date(estado.replace("Revisión desde:", "").trim()).getTime();
+            if (!isNaN(timestampRevision)) {
+              const transcurridoMins = (Date.now() - timestampRevision) / 1000 / 60;
+              if (transcurridoMins >= 5) {
+                console.log(`[INFO] Fila en REVISIÓN superó el tiempo de gracia de 5 min (${Math.round(transcurridoMins)} min). Reseteando...`);
+                debeBorrarse = true;
+              }
             }
           }
-        }
 
-        const existe = debeBorrarse ? false : await mensajeExiste(api, chatId, messageId);
+          const existe = debeBorrarse ? false : await mensajeExiste(api, chatId, messageId);
 
-        if (!existe) {
-          if (!debeBorrarse) {
-            console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Reseteando fila...`);
+          if (!existe) {
+            if (!debeBorrarse) {
+              console.log(`[INFO] Mensaje eliminado en Telegram (Chat: ${chatId}, ID: ${messageId}). Reseteando fila...`);
+            }
+
+            // Reseteo de fila contenido con reintento por fila
+            await ejecutarConReintento(
+              () => resetearFila(fila),
+              {
+                contexto: `Reseteo fila mensaje ID ${messageId}`,
+                maxIntentos: 3,
+                retrasoBaseMs: 300,
+              }
+            );
+            eliminados++;
           }
-          await resetearFila(fila);
-          eliminados++;
+        } catch (filaError: any) {
+          fallosFila++;
+          console.error(
+            `[ERROR] Falló el procesamiento/reseteo de la fila (Mensaje ID: ${messageId || "desconocido"}):`,
+            filaError?.message ?? filaError
+          );
+          // Contención de error a nivel de fila: continúa con la siguiente fila sin abortar el bucle
         }
 
         await new Promise((r) => setTimeout(r, config.app.cleanupRequestDelayMs));
@@ -105,11 +132,11 @@ export async function ejecutarLimpieza(api: Api, limiteFilas: number = 15, force
 
       console.log(
         eliminados > 0
-          ? `[INFO] Limpieza finalizada: ${eliminados} fila(s) reseteada(s).`
-          : "[INFO] Limpieza finalizada: no se detectaron mensajes borrados."
+          ? `[INFO] Limpieza finalizada: ${eliminados} fila(s) reseteada(s)${fallosFila > 0 ? `, ${fallosFila} fallo(s) contenido(s)` : ""}.`
+          : `[INFO] Limpieza finalizada: no se detectaron mensajes borrados${fallosFila > 0 ? ` (${fallosFila} fallo(s) contenido(s))` : ""}.`
       );
-    } catch (error) {
-      console.error("[ERROR] Falló la ejecución de la limpieza:", error);
+    } catch (error: any) {
+      console.error("[ERROR] Falló la ejecución general de la limpieza:", error?.message ?? error);
     }
   });
 }
@@ -121,17 +148,32 @@ export function programarLimpieza(api: Api): void {
 
   const jobCortes = new Cron("0 9,14,18 * * *", { timezone: "America/Caracas" }, () => ejecutarLimpieza(api, 60));
 
+  // Reseteo diario de medianoche con reintentos a nivel de job (3 intentos con espera de 15s)
   new Cron("0 0 * * *", { timezone: "America/Caracas" }, async () => {
-    await sheetsMutex.runExclusive(async () => {
-      console.log("[INFO] Iniciando reseteo diario de medianoche...");
+    console.log("[INFO] Iniciando trabajo programado de reseteo diario de medianoche...");
+    const maxIntentosJob = 3;
+    const delayEntreIntentosMs = process.env.NODE_ENV === "test" ? 5 : 15000;
+
+    for (let intento = 1; intento <= maxIntentosJob; intento++) {
       try {
-        const doc = await obtenerHojaDeCalculo();
-        await resetearFilasDeDiasAnteriores(doc);
-        await ordenarYLimpiarHojaPrincipal(doc);
-      } catch (err) {
-        console.error("[ERROR] Fallo en el reseteo diario de medianoche:", err);
+        await sheetsMutex.runExclusive(async () => {
+          console.log(`[INFO] Ejecutando reseteo diario de medianoche (intento ${intento}/${maxIntentosJob})...`);
+          const doc = await obtenerHojaDeCalculo();
+          await resetearFilasDeDiasAnteriores(doc);
+          await ordenarYLimpiarHojaPrincipal(doc);
+          console.log("[INFO] Reseteo diario de medianoche completado exitosamente.");
+        });
+        break; // Éxito: salir del bucle de reintento
+      } catch (err: any) {
+        console.error(`[ERROR] Intento ${intento}/${maxIntentosJob} del reseteo diario de medianoche falló:`, err?.message ?? err);
+        if (intento < maxIntentosJob) {
+          console.log(`[INFO] Reintentando reseteo diario de medianoche en ${delayEntreIntentosMs / 1000}s...`);
+          await new Promise((r) => setTimeout(r, delayEntreIntentosMs));
+        } else {
+          console.error("[FATAL] Se agotaron todos los reintentos para el reseteo diario de medianoche.");
+        }
       }
-    });
+    }
   });
 
   const jobReporte9am = new Cron("5 9 * * *",  { timezone: "America/Caracas" }, () => enviarReporteDiario(api, 1));
@@ -144,16 +186,31 @@ export function programarLimpieza(api: Api): void {
 
   new Cron("6 18 * * *", { timezone: "America/Caracas" }, () => enviarAvisoNodosFaltantes(api));
 
+  // Resguardo diario de historial (11:00 PM VET) con reintentos a nivel de job
   const jobHistorico = new Cron("0 23 * * *", { timezone: "America/Caracas" }, async () => {
-    await sheetsMutex.runExclusive(async () => {
-      console.log("[INFO] Iniciando resguardo de historial diario a las 11:00 PM VET...");
+    console.log("[INFO] Iniciando trabajo programado de resguardo de historial diario (11:00 PM VET)...");
+    const maxIntentosJob = 3;
+    const delayEntreIntentosMs = process.env.NODE_ENV === "test" ? 5 : 15000;
+
+    for (let intento = 1; intento <= maxIntentosJob; intento++) {
       try {
-        const doc = await obtenerHojaDeCalculo();
-        await guardarHistoricoDiario(doc);
-      } catch (err) {
-        console.error("[ERROR] Fallo al guardar el historial diario:", err);
+        await sheetsMutex.runExclusive(async () => {
+          console.log(`[INFO] Ejecutando resguardo de historial diario (intento ${intento}/${maxIntentosJob})...`);
+          const doc = await obtenerHojaDeCalculo();
+          await guardarHistoricoDiario(doc);
+          console.log("[INFO] Resguardo de historial diario completado exitosamente.");
+        });
+        break; // Éxito: salir del bucle de reintento
+      } catch (err: any) {
+        console.error(`[ERROR] Intento ${intento}/${maxIntentosJob} del resguardo de historial diario falló:`, err?.message ?? err);
+        if (intento < maxIntentosJob) {
+          console.log(`[INFO] Reintentando resguardo de historial diario en ${delayEntreIntentosMs / 1000}s...`);
+          await new Promise((r) => setTimeout(r, delayEntreIntentosMs));
+        } else {
+          console.error("[FATAL] Se agotaron todos los reintentos para el resguardo de historial diario.");
+        }
       }
-    });
+    }
   });
 
   new Cron("*/15 * * * *", { timezone: "America/Caracas" }, async () => {

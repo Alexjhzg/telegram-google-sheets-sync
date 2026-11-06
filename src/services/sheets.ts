@@ -4,6 +4,7 @@ import { config } from "../config/index.js";
 import { Mutex } from "../utils/mutex.js";
 import { HistorialAcumulado } from "../types/index.js";
 import { estandarizarFecha, obtenerFechaHoyEstandar } from "../utils/dateUtils.js";
+import { ejecutarConReintento, esErrorReintentableGoogle } from "../utils/retry.js";
 
 // Lock global para secuenciar todas las operaciones asíncronas sobre Google Sheets
 export const sheetsMutex = new Mutex();
@@ -25,12 +26,30 @@ export const COLUMNAS = {
 } as const;
 
 let docPromise: Promise<GoogleSpreadsheet> | null = null;
+let testSpreadsheetProvider: (() => Promise<GoogleSpreadsheet>) | null = null;
+
+/**
+ * Permite a las suites de prueba inyectar un proveedor de GoogleSpreadsheet simulado (mock),
+ * evitando monkeypatching en módulos ESM nativos.
+ * Pasar null para restaurar la conexión por defecto.
+ */
+export function setHojaDeCalculoProviderForTesting(
+  provider: (() => Promise<GoogleSpreadsheet>) | null
+): void {
+  testSpreadsheetProvider = provider;
+  docPromise = null;
+}
 
 /**
  * Crea, autentica y carga el cliente de Google Sheets una sola vez,
- * reutilizando la conexión en las llamadas posteriores.
+ * reutilizando la conexión en las llamadas posteriores y protegiendo
+ * la carga inicial con reintentos exponenciales.
  */
 export async function obtenerHojaDeCalculo(): Promise<GoogleSpreadsheet> {
+  if (testSpreadsheetProvider) {
+    return testSpreadsheetProvider();
+  }
+
   if (docPromise) {
     return docPromise;
   }
@@ -50,7 +69,20 @@ export async function obtenerHojaDeCalculo(): Promise<GoogleSpreadsheet> {
     });
 
     const doc = new GoogleSpreadsheet(config.google.spreadsheetId, auth);
-    await doc.loadInfo();
+
+    // Carga inicial de metadatos con reintentos ante 503 / caídas transitorias
+    await ejecutarConReintento(
+      async () => {
+        await doc.loadInfo();
+      },
+      {
+        contexto: "doc.loadInfo",
+        onReintento: (err, intento, delay) => {
+          console.warn(`[WARN] Reintentando doc.loadInfo() (${intento}/3) tras ${delay}ms debido a error transitorio.`);
+        },
+      }
+    );
+
     console.log("[INFO] Conexión con Google Sheets establecida con éxito.");
     return doc;
   })().catch((err) => {
@@ -63,15 +95,38 @@ export async function obtenerHojaDeCalculo(): Promise<GoogleSpreadsheet> {
 
 /**
  * Asegura que las columnas de rastreo existen en la hoja.
- * Las añade automáticamente si no están presentes.
+ * Envuelve loadHeaderRow y setHeaderRow con reintentos y tolerancia ante errores transitorios.
  */
 export async function asegurarColumnas(hoja: GoogleSpreadsheetWorksheet): Promise<void> {
-  await hoja.loadHeaderRow();
+  let cabeceras: string[] = [];
 
-  const cabeceras = [...hoja.headerValues];
-  let modificado  = false;
+  try {
+    await ejecutarConReintento(
+      async () => {
+        await hoja.loadHeaderRow();
+      },
+      {
+        contexto: "loadHeaderRow en asegurarColumnas",
+        onReintento: (err, intento, delay) => {
+          console.warn(`[WARN] Reintentando loadHeaderRow (${intento}/3) tras ${delay}ms por error transitorio.`);
+        },
+      }
+    );
+    cabeceras = Array.isArray(hoja.headerValues) ? [...hoja.headerValues] : [];
+  } catch (error) {
+    // Si la hoja no tiene cabeceras aún (caso inicial estándar de google-spreadsheet)
+    if (error instanceof Error && error.message.includes("No values in the header row")) {
+      console.log("[INFO] La hoja no contiene cabeceras aún. Se inicializarán.");
+      cabeceras = [];
+    } else {
+      throw error;
+    }
+  }
 
-  for (const col of [COLUMNAS.ID_MENSAJE, COLUMNAS.ID_CHAT, COLUMNAS.ESTADO]) {
+  const columnasRequeridas = [COLUMNAS.ID_MENSAJE, COLUMNAS.ID_CHAT, COLUMNAS.ESTADO];
+  let modificado = false;
+
+  for (const col of columnasRequeridas) {
     if (!cabeceras.includes(col)) {
       console.log(`[INFO] Columna '${col}' no encontrada. Añadiéndola...`);
       cabeceras.push(col);
@@ -79,7 +134,19 @@ export async function asegurarColumnas(hoja: GoogleSpreadsheetWorksheet): Promis
     }
   }
 
-  if (modificado) await hoja.setHeaderRow(cabeceras);
+  if (modificado) {
+    await ejecutarConReintento(
+      async () => {
+        await hoja.setHeaderRow(cabeceras);
+      },
+      {
+        contexto: "setHeaderRow en asegurarColumnas",
+        onReintento: (err, intento, delay) => {
+          console.warn(`[WARN] Reintentando setHeaderRow (${intento}/3) tras ${delay}ms por error transitorio.`);
+        },
+      }
+    );
+  }
 }
 
 /**
@@ -118,8 +185,7 @@ export function buscarFilaPorNodo(filas: GoogleSpreadsheetRow[], municipioOficia
 }
 
 /**
- * Resetea los datos de reporte de una fila fija (borra bloques, totales,
- * remitente, fecha, hora, ID de mensaje y estado), dejando fijos municipio y nodo.
+ * Resetea los datos de reporte de una fila fija, protegiendo fila.save() con reintentos.
  */
 export async function resetearFila(fila: GoogleSpreadsheetRow): Promise<void> {
   fila.set(COLUMNAS.TOTAL_VERIFICADORES, "0");
@@ -132,7 +198,18 @@ export async function resetearFila(fila: GoogleSpreadsheetRow): Promise<void> {
   fila.set(COLUMNAS.ID_MENSAJE,          "");
   fila.set(COLUMNAS.ID_CHAT,             "");
   fila.set(COLUMNAS.ESTADO,              "");
-  await fila.save();
+
+  await ejecutarConReintento(
+    async () => {
+      await fila.save();
+    },
+    {
+      contexto: "fila.save en resetearFila",
+      onReintento: (err, intento, delay) => {
+        console.warn(`[WARN] Reintentando fila.save() en resetearFila (${intento}/3) tras ${delay}ms.`);
+      },
+    }
+  );
 }
 
 /**
@@ -141,7 +218,16 @@ export async function resetearFila(fila: GoogleSpreadsheetRow): Promise<void> {
 export async function resetearFilasDeDiasAnteriores(doc: GoogleSpreadsheet): Promise<number> {
   const hoja = doc.sheetsByTitle["registros_telegram"];
   if (!hoja) return 0;
-  const filas = await hoja.getRows();
+
+  const filas = await ejecutarConReintento(
+    async () => await hoja.getRows(),
+    {
+      contexto: "hoja.getRows en resetearFilasDeDiasAnteriores",
+      onReintento: (err, intento, delay) => {
+        console.warn(`[WARN] Reintentando lectura de filas (${intento}/3) en resetearFilasDeDiasAnteriores tras ${delay}ms.`);
+      },
+    }
+  );
 
   const hoyStr = obtenerFechaHoyEstandar();
 
@@ -188,7 +274,16 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
   
   const hojaPrincipal = doc.sheetsByTitle["registros_telegram"];
   if (!hojaPrincipal) return;
-  const filas = await hojaPrincipal.getRows();
+
+  const filas = await ejecutarConReintento(
+    async () => await hojaPrincipal.getRows(),
+    {
+      contexto: "hojaPrincipal.getRows en guardarHistoricoDiario",
+      onReintento: (err, intento, delay) => {
+        console.warn(`[WARN] Reintentando hojaPrincipal.getRows() (${intento}/3) tras ${delay}ms.`);
+      },
+    }
+  );
 
   let fechaReporte = fechaEspecifica ? (estandarizarFecha(fechaEspecifica) || fechaEspecifica) : null;
   if (!fechaReporte) {
@@ -209,32 +304,56 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
   let sheetHistorica = doc.sheetsByTitle["registros_historicos_telegram"];
   if (!sheetHistorica) {
     console.log("[INFO] Creando la hoja 'registros_historicos_telegram' ya que no existía...");
-    sheetHistorica = await doc.addSheet({
-      title: "registros_historicos_telegram"
-    });
+    sheetHistorica = await ejecutarConReintento(
+      async () => await doc.addSheet({ title: "registros_historicos_telegram" }),
+      {
+        contexto: "doc.addSheet en guardarHistoricoDiario",
+        onReintento: (err, intento, delay) => {
+          console.warn(`[WARN] Reintentando doc.addSheet() (${intento}/3) tras ${delay}ms.`);
+        },
+      }
+    );
   }
 
   try {
-    await sheetHistorica.loadHeaderRow();
+    await ejecutarConReintento(
+      async () => await sheetHistorica.loadHeaderRow(),
+      {
+        contexto: "sheetHistorica.loadHeaderRow",
+      }
+    );
   } catch (err) {
     console.log("[INFO] Inicializando cabeceras en 'registros_historicos_telegram'...");
-    await sheetHistorica.setHeaderRow([
-      COLUMNAS.MUNICIPIO,
-      COLUMNAS.NODO,
-      COLUMNAS.TOTAL_VERIFICADORES,
-      COLUMNAS.BLOQUE_1,
-      COLUMNAS.BLOQUE_2,
-      COLUMNAS.BLOQUE_3,
-      COLUMNAS.FECHA,
-      COLUMNAS.HORA,
-      COLUMNAS.REMITENTE,
-      COLUMNAS.ID_MENSAJE,
-      COLUMNAS.ID_CHAT,
-      COLUMNAS.ESTADO
-    ]);
+    await ejecutarConReintento(
+      async () => {
+        await sheetHistorica.setHeaderRow([
+          COLUMNAS.MUNICIPIO,
+          COLUMNAS.NODO,
+          COLUMNAS.TOTAL_VERIFICADORES,
+          COLUMNAS.BLOQUE_1,
+          COLUMNAS.BLOQUE_2,
+          COLUMNAS.BLOQUE_3,
+          COLUMNAS.FECHA,
+          COLUMNAS.HORA,
+          COLUMNAS.REMITENTE,
+          COLUMNAS.ID_MENSAJE,
+          COLUMNAS.ID_CHAT,
+          COLUMNAS.ESTADO
+        ]);
+      },
+      {
+        contexto: "sheetHistorica.setHeaderRow",
+      }
+    );
   }
 
-  const filasHistoricas = await sheetHistorica.getRows();
+  const filasHistoricas = await ejecutarConReintento(
+    async () => await sheetHistorica.getRows(),
+    {
+      contexto: "sheetHistorica.getRows",
+    }
+  );
+
   let filasFechaActual = filasHistoricas.filter(f => {
     const rawF = (f.get(COLUMNAS.FECHA) || "").trim();
     const stdF = estandarizarFecha(rawF) || rawF;
@@ -246,7 +365,12 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
     console.log(`[ADVERTENCIA] Detectadas ${filasFechaActual.length} filas en histórico para la fecha ${fechaReporte}. Limpiando filas duplicadas sobrantes...`);
     const sobrantes = filasFechaActual.slice(46);
     for (let i = sobrantes.length - 1; i >= 0; i--) {
-      await sobrantes[i].delete();
+      await ejecutarConReintento(
+        async () => await sobrantes[i].delete(),
+        {
+          contexto: "sobrantes[i].delete",
+        }
+      );
     }
     filasFechaActual = filasFechaActual.slice(0, 46);
   }
@@ -294,14 +418,27 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
     const minRowIndex = Math.min(...filasFechaActual.map(f => f.rowNumber - 1));
     const maxRowIndex = Math.max(...filasFechaActual.map(f => f.rowNumber - 1));
 
-    await sheetHistorica.loadCells({
-      startRowIndex: minRowIndex,
-      endRowIndex: maxRowIndex + 1,
-      startColumnIndex: 0,
-      endColumnIndex: 12
-    });
+    await ejecutarConReintento(
+      async () => {
+        await sheetHistorica.loadCells({
+          startRowIndex: minRowIndex,
+          endRowIndex: maxRowIndex + 1,
+          startColumnIndex: 0,
+          endColumnIndex: 12
+        });
+      },
+      {
+        contexto: "sheetHistorica.loadCells",
+      }
+    );
 
-    await sheetHistorica.loadHeaderRow();
+    await ejecutarConReintento(
+      async () => await sheetHistorica.loadHeaderRow(),
+      {
+        contexto: "sheetHistorica.loadHeaderRow consolidados",
+      }
+    );
+
     const headers = sheetHistorica.headerValues;
     const colIdx = {
       tot: headers.indexOf(COLUMNAS.TOTAL_VERIFICADORES),
@@ -367,7 +504,12 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
     }
 
     if (actualizados > 0) {
-      await sheetHistorica.saveUpdatedCells();
+      await ejecutarConReintento(
+        async () => await sheetHistorica.saveUpdatedCells(),
+        {
+          contexto: "sheetHistorica.saveUpdatedCells",
+        }
+      );
       console.log(`[INFO] Histórico del día ${fechaReporte} actualizado con éxito (${actualizados} nodos actualizados).`);
     }
     return;
@@ -429,7 +571,12 @@ export async function guardarHistoricoDiario(doc: GoogleSpreadsheet, fechaEspeci
     }
   });
 
-  await sheetHistorica.addRows(filasDatos);
+  await ejecutarConReintento(
+    async () => await sheetHistorica.addRows(filasDatos),
+    {
+      contexto: "sheetHistorica.addRows",
+    }
+  );
   console.log(`[INFO] Historial diario de la fecha ${fechaReporte} guardado con éxito. Se copiaron ${filasDatos.length} filas.`);
 }
 

@@ -106,6 +106,8 @@ export interface ResultadoProcesamiento {
   b1Final?: number;
   b2Final?: number;
   b3Final?: number;
+  sincronizadoSheets?: boolean;
+  persistidoDB?: boolean;
 }
 
 export interface SyncCatalogoResultado {

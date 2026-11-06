@@ -28,8 +28,14 @@ async function manejarEliminacion(ctx: Context, messageId: number): Promise<void
     } catch (err: any) {
       console.warn(`[ADVERTENCIA] No se pudo borrar el mensaje de Telegram ID ${messageId}: ${err.message}`);
     }
-  } catch (error) {
-    console.error("[ERROR] No se pudo resetear el registro de Google Sheets:", error);
+  } catch (error: any) {
+    console.error("[ERROR] No se pudo procesar la eliminación:", error?.message ?? error);
+    try {
+      await ctx.reply(
+        "⚠️ No se pudo completar la eliminación en la hoja de cálculo por un error temporal de conexión. Por favor intenta nuevamente.",
+        { reply_parameters: { message_id: messageId } }
+      );
+    } catch (_) {}
   }
 }
 
@@ -225,6 +231,11 @@ export function registrarHandlers(bot: Bot): void {
             `• *Límite oficial permitido:* \`${resultado.limiteVerificadores}\` verificadores.\n` +
             `• *Total acumulado proyectado:* \`${resultado.totalFinal}\` (Suma de hoy: B1: \`${resultado.b1Final}\` | B2: \`${resultado.b2Final}\` | B3: \`${resultado.b3Final}\`)\n\n` +
             `👉 *¿Cómo solucionarlo?* Por favor, edita tu mensaje o vuelve a enviar el reporte corregido con la cantidad de personal ajustada.`;
+        } else if (resultado.razon === "ERROR_CONEXION_SHEETS") {
+          mensajeRespuesta =
+            `⚠️ *Aviso de servicio: Conexión temporalmente no disponible*\n\n` +
+            `Hola *${remitente}*, no pudimos registrar tu reporte en este momento debido a una indisponibilidad temporal en los servidores de Google Sheets (Error 503).\n\n` +
+            `👉 *¿Cómo solucionarlo?* Por favor, espera 1 o 2 minutos y reenvía tu reporte.`;
         }
 
         if (mensajeRespuesta) {
@@ -240,10 +251,44 @@ export function registrarHandlers(bot: Bot): void {
         return;
       }
 
+      // El reporte fue aceptado exitosamente
       await reaccionar(ctx, "👍");
-    } catch (error) {
-      console.error("[ERROR] Falló la persistencia en Google Sheets:", error);
-      throw error;
+
+      // Si se aplicó degradación graciosa (guardado en BD, pero Sheets no respondió tras reintentos):
+      if (resultado.sincronizadoSheets === false) {
+        console.warn(`[ADVERTENCIA] Reporte guardado en Base de Datos pero sincronización en Sheets diferida por 503 (Mensaje ID: ${messageId}).`);
+        try {
+          await ctx.reply(
+            `ℹ️ *Reporte resguardado en base de datos*\n\n` +
+            `Hola *${remitente}*, tu reporte fue registrado exitosamente en el sistema central. La sincronización visual en Google Sheets se reflejará en breve debido a demoras temporales del servicio de Google.`,
+            {
+              parse_mode: "Markdown",
+              reply_parameters: { message_id: messageId },
+            }
+          );
+        } catch (warnErr: any) {
+          console.warn("[ADVERTENCIA] No se pudo enviar el aviso informativo de sincronización diferida:", warnErr.message);
+        }
+      }
+    } catch (error: any) {
+      console.error("[ERROR] Error procesando reporte en message handler:", error?.message ?? error);
+      try {
+        await reaccionar(ctx, "👎");
+      } catch (_) {}
+
+      try {
+        await ctx.reply(
+          `⚠️ *Aviso de servicio*\n\n` +
+          `Hola *${remitente}*, ocurrió un inconveniente técnico temporal al procesar tu reporte. Por favor, reenvía tu mensaje en unos instantes.`,
+          {
+            parse_mode: "Markdown",
+            reply_parameters: { message_id: messageId },
+          }
+        );
+      } catch (replyErr: any) {
+        console.error("[ERROR] No se pudo enviar mensaje de error al usuario:", replyErr.message);
+      }
+      // NUNCA ejecutar "throw error" para evitar que el fallo escale a bot.catch
     }
   });
 }
