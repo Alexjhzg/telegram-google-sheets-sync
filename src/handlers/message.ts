@@ -37,7 +37,7 @@ async function manejarEliminacion(ctx: Context, messageId: number): Promise<void
         "⚠️ No se pudo completar la eliminación en la hoja de cálculo por un error temporal de conexión. Por favor intenta nuevamente.",
         { reply_parameters: { message_id: messageId } }
       );
-    } catch (_) { }
+    } catch (_) {}
   }
 }
 
@@ -55,10 +55,10 @@ export function registrarHandlers(bot: Bot): void {
 
     console.log(
       `\n=== ${esEdicion ? "MENSAJE EDITADO" : "NUEVO MENSAJE"} ===` +
-      `\nDe: ${remitente} (@${ctx.from?.username ?? "sin_usuario"} | ID: ${ctx.from?.id})` +
-      `\nChat: ${ctx.chat.id} | Mensaje ID: ${messageId}` +
-      `\n${texto}` +
-      `\n=============================\n`
+        `\nDe: ${remitente} (@${ctx.from?.username ?? "sin_usuario"} | ID: ${ctx.from?.id})` +
+        `\nChat: ${ctx.chat.id} | Mensaje ID: ${messageId}` +
+        `\n${texto}` +
+        `\n=============================\n`
     );
 
     const creationTimestamp = mensajeObj.date || Math.floor(Date.now() / 1000);
@@ -273,7 +273,7 @@ export function registrarHandlers(bot: Bot): void {
         try {
           await ctx.reply(
             `ℹ️ *Reporte resguardado en base de datos*\n\n` +
-            `Hola *${remitente}*, tu reporte fue registrado exitosamente en el sistema central. La sincronización visual en Google Sheets se reflejará en breve debido a demoras temporales del servicio de Google.`,
+              `Hola *${remitente}*, tu reporte fue registrado exitosamente en el sistema central. La sincronización visual en Google Sheets se reflejará en breve debido a demoras temporales del servicio de Google.`,
             {
               parse_mode: "Markdown",
               reply_parameters: { message_id: messageId },
@@ -293,12 +293,12 @@ export function registrarHandlers(bot: Bot): void {
       );
       try {
         await reaccionar(ctx, "👎");
-      } catch (_) { }
+      } catch (_) {}
 
       try {
         await ctx.reply(
           `⚠️ *Aviso de servicio*\n\n` +
-          `Hola *${remitente}*, ocurrió un inconveniente técnico temporal al procesar tu reporte. Por favor, reenvía tu mensaje en unos instantes.`,
+            `Hola *${remitente}*, ocurrió un inconveniente técnico temporal al procesar tu reporte. Por favor, reenvía tu mensaje en unos instantes.`,
           {
             parse_mode: "Markdown",
             reply_parameters: { message_id: messageId },
