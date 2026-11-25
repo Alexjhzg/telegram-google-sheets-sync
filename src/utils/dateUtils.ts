@@ -110,4 +110,3 @@ export function obtenerFechaHoyEstandar(): string {
   });
   return formatter.format(date);
 }
-

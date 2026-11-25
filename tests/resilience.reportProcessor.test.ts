@@ -65,7 +65,11 @@ test("resilience.reportProcessor - recupera tras error 503 transitorio en filaEx
     const resultado = await procesarYGuardarReporte(payload);
 
     assert.equal(resultado.valido, true, "El reporte debe ser válido y procesado con éxito");
-    assert.equal(hojaTelegram.stats.saveCalls, 2, "Debe haber reintentado save() exactamente una vez");
+    assert.equal(
+      hojaTelegram.stats.saveCalls,
+      2,
+      "Debe haber reintentado save() exactamente una vez"
+    );
     assert.equal(resultado.totalFinal, 2);
   } finally {
     setHojaDeCalculoProviderForTesting(null);
@@ -150,7 +154,11 @@ test("resilience.reportProcessor - proceso emite cero 'unhandledRejection' duran
     // Esperar un ciclo del event loop para capturar cualquier microtask huérfana
     await new Promise((r) => setTimeout(r, 50));
 
-    assert.equal(unhandledRejectionsCount, 0, "No debe haberse registrado ningún unhandledRejection");
+    assert.equal(
+      unhandledRejectionsCount,
+      0,
+      "No debe haberse registrado ningún unhandledRejection"
+    );
   } finally {
     process.off("unhandledRejection", unhandledHandler);
     setHojaDeCalculoProviderForTesting(null);

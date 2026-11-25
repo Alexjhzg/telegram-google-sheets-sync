@@ -13,7 +13,9 @@ export function registrarComandos(bot: Bot): void {
   bot.command("reporte", async (ctx: Context) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando /reporte (tiempo real) ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`);
+      console.log(
+        `[INFO] Comando /reporte (tiempo real) ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`
+      );
 
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) {
@@ -37,17 +39,24 @@ export function registrarComandos(bot: Bot): void {
   bot.command("lista", async (ctx: Context) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando /lista (desglose) ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`);
+      console.log(
+        `[INFO] Comando /lista (desglose) ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`
+      );
 
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) return;
 
-      const doc  = await obtenerHojaDeCalculo();
+      const doc = await obtenerHojaDeCalculo();
       const hoja = doc.sheetsByTitle["registros_telegram"];
       if (!hoja) return;
       const filas = await hoja.getRows();
 
-      const opts: Intl.DateTimeFormatOptions = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+      const opts: Intl.DateTimeFormatOptions = {
+        timeZone: config.app.timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      };
       const hoyStr = new Date().toLocaleDateString("es-VE", opts);
 
       const reportesHoy = filas.filter(
@@ -68,18 +77,18 @@ export function registrarComandos(bot: Bot): void {
       respuesta += "------------+-----+--+--+--+---\n";
 
       for (const fila of reportesHoy) {
-        const mun   = (fila.get(COLUMNAS.MUNICIPIO) || "").trim();
-        const nod   = (fila.get(COLUMNAS.NODO) || "").trim();
-        const b1    = (fila.get(COLUMNAS.BLOQUE_1)            || "0").trim();
-        const b2    = (fila.get(COLUMNAS.BLOQUE_2)            || "0").trim();
-        const b3    = (fila.get(COLUMNAS.BLOQUE_3)            || "0").trim();
+        const mun = (fila.get(COLUMNAS.MUNICIPIO) || "").trim();
+        const nod = (fila.get(COLUMNAS.NODO) || "").trim();
+        const b1 = (fila.get(COLUMNAS.BLOQUE_1) || "0").trim();
+        const b2 = (fila.get(COLUMNAS.BLOQUE_2) || "0").trim();
+        const b3 = (fila.get(COLUMNAS.BLOQUE_3) || "0").trim();
         const total = (fila.get(COLUMNAS.TOTAL_VERIFICADORES) || "0").trim();
 
-        const munPad   = mun.substring(0, 12).padEnd(12, " ");
-        const nodPad   = nod.padEnd(5, " ");
-        const b1Pad    = b1.padStart(2, " ");
-        const b2Pad    = b2.padStart(2, " ");
-        const b3Pad    = b3.padStart(2, " ");
+        const munPad = mun.substring(0, 12).padEnd(12, " ");
+        const nodPad = nod.padEnd(5, " ");
+        const b1Pad = b1.padStart(2, " ");
+        const b2Pad = b2.padStart(2, " ");
+        const b3Pad = b3.padStart(2, " ");
         const totalPad = total.padStart(3, " ");
 
         respuesta += `${munPad}|${nodPad}|${b1Pad}|${b2Pad}|${b3Pad}|${totalPad}\n`;
@@ -108,7 +117,12 @@ export function registrarComandos(bot: Bot): void {
         const hoja = doc.sheetsByTitle["registros_telegram"];
         if (hoja) {
           const filas = await hoja.getRows();
-          const opts: Intl.DateTimeFormatOptions = { timeZone: config.app.timezone, year: "numeric", month: "2-digit", day: "2-digit" };
+          const opts: Intl.DateTimeFormatOptions = {
+            timeZone: config.app.timezone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          };
           const hoyStr = new Date().toLocaleDateString("es-VE", opts);
           const reportesHoy = filas.filter(
             (fila) => (fila.get(COLUMNAS.FECHA) || "").trim() === hoyStr
@@ -149,9 +163,8 @@ export function registrarComandos(bot: Bot): void {
 
       const nowVE = Math.floor(Date.now() / 1000);
       const { bloqueActivo } = obtenerBloqueYHoraActivo(nowVE);
-      const horarioLaboral = bloqueActivo > 0
-        ? "🟢 Abierto (Recibiendo reportes)"
-        : "🔴 Cerrado (Bloqueo activo)";
+      const horarioLaboral =
+        bloqueActivo > 0 ? "🟢 Abierto (Recibiendo reportes)" : "🔴 Cerrado (Bloqueo activo)";
 
       const mensaje =
         `*Estado del Sistema*\n\n` +
@@ -172,7 +185,9 @@ export function registrarComandos(bot: Bot): void {
   const handlerSync = async (ctx: Context) => {
     try {
       const remitente = obtenerNombreRemitente(ctx);
-      console.log(`[INFO] Comando de sincronización de catálogo ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`);
+      console.log(
+        `[INFO] Comando de sincronización de catálogo ejecutado por ${remitente} (Chat: ${ctx.chat?.id})`
+      );
 
       const isAdmin = await esUsuarioAdmin(ctx);
       if (!isAdmin) {
@@ -180,16 +195,22 @@ export function registrarComandos(bot: Bot): void {
         return;
       }
 
-      await ctx.reply("🔄 Sincronizando catálogo de nodos desde Google Sheets hacia la base de datos SQL...");
+      await ctx.reply(
+        "🔄 Sincronizando catálogo de nodos desde Google Sheets hacia la base de datos SQL..."
+      );
       const res = await sincronizarCatalogoDesdeSheets();
 
       if (res.exitoso) {
-        let msg = `✅ *Catálogo sincronizado exitosamente*\n\n` +
+        let msg =
+          `✅ *Catálogo sincronizado exitosamente*\n\n` +
           `• *Nodos guardados/actualizados:* \`${res.sincronizados}\`\n` +
           `• *Nodos obsoletos eliminados:* \`${res.eliminados || 0}\``;
         await ctx.reply(msg, { parse_mode: "Markdown" });
       } else {
-        await ctx.reply(`⚠️ *Fallo en la sincronización del catálogo*\n\nRazón: \`${res.error || res.razon || "Desconocida"}\``, { parse_mode: "Markdown" });
+        await ctx.reply(
+          `⚠️ *Fallo en la sincronización del catálogo*\n\nRazón: \`${res.error || res.razon || "Desconocida"}\``,
+          { parse_mode: "Markdown" }
+        );
       }
     } catch (error) {
       console.error("[ERROR] Falló al ejecutar la sincronización manual del catálogo:", error);

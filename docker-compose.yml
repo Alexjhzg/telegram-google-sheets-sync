@@ -4,7 +4,6 @@
 # ──────────────────────────────────────────────────────────────
 
 services:
-
   telegram-bot:
     # ── Construcción de la imagen desde el Dockerfile local ───
     build:
@@ -29,8 +28,8 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"   # Máximo 10 MB por archivo de log
-        max-file: "5"     # Rotar y conservar hasta 5 archivos históricos
+        max-size: "10m" # Máximo 10 MB por archivo de log
+        max-file: "5" # Rotar y conservar hasta 5 archivos históricos
 
     # ── Señal de parada limpia ────────────────────────────────
     # Permite que grammy finalice el long-polling correctamente.

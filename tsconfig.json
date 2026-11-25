@@ -10,14 +10,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": [
-    "src/**/*",
-    "bot.ts",
-    "tests/**/*",
-    "scripts/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "scratch"
-  ]
+  "include": ["src/**/*", "bot.ts", "tests/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "scratch"]
 }

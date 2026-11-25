@@ -19,7 +19,7 @@ async function estandarizarTodoHistoricoATexto() {
         startRowIndex: 0,
         endRowIndex: rows.length + 5,
         startColumnIndex: 6,
-        endColumnIndex: 7
+        endColumnIndex: 7,
       });
 
       let convertidas = 0;
@@ -44,7 +44,6 @@ async function estandarizarTodoHistoricoATexto() {
       console.log(`Guardando ${convertidas} celdas convertidas de número a texto...`);
       await sheetHist.saveUpdatedCells();
       console.log(`✅ ¡ÉXITO! Estandarizadas ${convertidas} celdas a texto DD/MM/YYYY.`);
-
     } catch (err: any) {
       console.error("Error al estandarizar:", err);
     }

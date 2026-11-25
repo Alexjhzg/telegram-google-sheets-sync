@@ -15,7 +15,9 @@ for (const key of REQUIRED_VARS) {
 
 export function validarConfigBot(): void {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error(`[FATAL] La variable de entorno "TELEGRAM_BOT_TOKEN" no está definida. Imposible iniciar el bot de Telegram.`);
+    console.error(
+      `[FATAL] La variable de entorno "TELEGRAM_BOT_TOKEN" no está definida. Imposible iniciar el bot de Telegram.`
+    );
     process.exit(1);
   }
 }
@@ -25,7 +27,9 @@ export const config = {
     token: process.env.TELEGRAM_BOT_TOKEN!,
     managerChatId: process.env.TELEGRAM_MANAGER_CHAT_ID || null,
     managerChatIds: process.env.TELEGRAM_MANAGER_CHAT_ID
-      ? process.env.TELEGRAM_MANAGER_CHAT_ID.split(",").map((id) => id.trim()).filter(Boolean)
+      ? process.env.TELEGRAM_MANAGER_CHAT_ID.split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
       : [],
   },
 
@@ -37,7 +41,11 @@ export const config = {
 
   db: {
     url: process.env.DATABASE_URL || process.env.DB_URL || process.env.SUPABASE_URL || null,
-    key: process.env.DATABASE_KEY || process.env.DB_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || null,
+    key:
+      process.env.DATABASE_KEY ||
+      process.env.DB_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      null,
     enabled: !!(
       (process.env.DATABASE_URL || process.env.DB_URL || process.env.SUPABASE_URL) &&
       (process.env.DATABASE_KEY || process.env.DB_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -48,7 +56,8 @@ export const config = {
     timezone: "America/Caracas",
     reportKeyword: "Formato de reporte",
     cutoffHours: [9, 14, 18],
-    reportEditGracePeriodMins: parseInt(process.env.REPORT_EDIT_GRACE_PERIOD_MINS || "10", 10) || 10,
+    reportEditGracePeriodMins:
+      parseInt(process.env.REPORT_EDIT_GRACE_PERIOD_MINS || "10", 10) || 10,
     cleanupIntervalMs: 5 * 60 * 1000,
     cleanupInitialDelayMs: 10_000,
     cleanupRequestDelayMs: 500,

@@ -26,7 +26,9 @@ async function manejarEliminacion(ctx: Context, messageId: number): Promise<void
       await ctx.deleteMessage();
       console.log(`[INFO] Mensaje de Telegram ID ${messageId} eliminado exitosamente.`);
     } catch (err: any) {
-      console.warn(`[ADVERTENCIA] No se pudo borrar el mensaje de Telegram ID ${messageId}: ${err.message}`);
+      console.warn(
+        `[ADVERTENCIA] No se pudo borrar el mensaje de Telegram ID ${messageId}: ${err.message}`
+      );
     }
   } catch (error: any) {
     console.error("[ERROR] No se pudo procesar la eliminación:", error?.message ?? error);
@@ -35,7 +37,7 @@ async function manejarEliminacion(ctx: Context, messageId: number): Promise<void
         "⚠️ No se pudo completar la eliminación en la hoja de cálculo por un error temporal de conexión. Por favor intenta nuevamente.",
         { reply_parameters: { message_id: messageId } }
       );
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -46,10 +48,10 @@ export function registrarHandlers(bot: Bot): void {
     const mensajeObj = ctx.message || ctx.editedMessage;
     if (!mensajeObj || !ctx.chat) return;
 
-    const texto      = mensajeObj.text || "";
-    const messageId  = mensajeObj.message_id;
-    const esEdicion  = !!ctx.editedMessage;
-    const remitente  = obtenerNombreRemitente(ctx);
+    const texto = mensajeObj.text || "";
+    const messageId = mensajeObj.message_id;
+    const esEdicion = !!ctx.editedMessage;
+    const remitente = obtenerNombreRemitente(ctx);
 
     console.log(
       `\n=== ${esEdicion ? "MENSAJE EDITADO" : "NUEVO MENSAJE"} ===` +
@@ -87,16 +89,20 @@ export function registrarHandlers(bot: Bot): void {
     const fueraDeJornada = bloqueActivo === 0 || infoAhora.bloqueActivo === 0;
 
     const esComandoEliminar = REGEX_ELIMINAR.test(texto);
-    const esReporte = texto.toLowerCase().includes(config.app.reportKeyword.toLowerCase()) ||
+    const esReporte =
+      texto.toLowerCase().includes(config.app.reportKeyword.toLowerCase()) ||
       (/(?:Municipio|municipio)\*?\s*:/i.test(texto) && /(?:Nodo|nodo)\*?\s*:/i.test(texto));
 
     if (fueraDeJornada) {
       if (esReporte || esComandoEliminar) {
-        console.log(`[INFO] Reporte o acción recibida fuera de jornada laboral (${horaStr} VET). Rechazando con alerta.`);
+        console.log(
+          `[INFO] Reporte o acción recibida fuera de jornada laboral (${horaStr} VET). Rechazando con alerta.`
+        );
         await reaccionar(ctx, "👎");
         const tipoAccion = esEdicion ? "Edición rechazada" : "Reporte rechazado";
-        const startTotalMin = (config.app.workStartHour ?? 6) * 60 + (config.app.workStartMinute ?? 0);
-        let detalleHorario = "";
+        const startTotalMin =
+          (config.app.workStartHour ?? 6) * 60 + (config.app.workStartMinute ?? 0);
+        let detalleHorario: string;
         if (infoAhora.minutosDelDia < startTotalMin) {
           detalleHorario = `La recepción de reportes de hoy inicia a las 06:00 AM VET. Por favor, envía tu reporte a partir de las 06:00 AM.`;
         } else {
@@ -112,13 +118,18 @@ export function registrarHandlers(bot: Bot): void {
         try {
           await ctx.reply(mensajeFuera, {
             parse_mode: "Markdown",
-            reply_parameters: { message_id: messageId }
+            reply_parameters: { message_id: messageId },
           });
         } catch (err: any) {
-          console.error("[ERROR] No se pudo enviar el mensaje de rechazo fuera de jornada:", err.message);
+          console.error(
+            "[ERROR] No se pudo enviar el mensaje de rechazo fuera de jornada:",
+            err.message
+          );
         }
       } else {
-        console.log(`[INFO] Mensaje general recibido fuera de jornada laboral (${horaStr} VET). Ignorando silenciosamente.`);
+        console.log(
+          `[INFO] Mensaje general recibido fuera de jornada laboral (${horaStr} VET). Ignorando silenciosamente.`
+        );
       }
       return;
     }
@@ -144,7 +155,7 @@ export function registrarHandlers(bot: Bot): void {
       await reaccionar(ctx, "👎");
 
       const tieneMunicipio = /(?:Municipio|municipio)\*?\s*:/i.test(texto);
-      const tieneNodo      = /(?:Nodo|nodo)\*?\s*:/i.test(texto);
+      const tieneNodo = /(?:Nodo|nodo)\*?\s*:/i.test(texto);
 
       let mensajeError = "";
       if (!tieneMunicipio && !tieneNodo) {
@@ -173,7 +184,7 @@ export function registrarHandlers(bot: Bot): void {
       if (mensajeError) {
         try {
           await ctx.reply(mensajeError, {
-            reply_parameters: { message_id: messageId }
+            reply_parameters: { message_id: messageId },
           });
         } catch (err: any) {
           console.error("[ERROR] No se pudo enviar el mensaje de alerta de formato:", err.message);
@@ -256,7 +267,9 @@ export function registrarHandlers(bot: Bot): void {
 
       // Si se aplicó degradación graciosa (guardado en BD, pero Sheets no respondió tras reintentos):
       if (resultado.sincronizadoSheets === false) {
-        console.warn(`[ADVERTENCIA] Reporte guardado en Base de Datos pero sincronización en Sheets diferida por 503 (Mensaje ID: ${messageId}).`);
+        console.warn(
+          `[ADVERTENCIA] Reporte guardado en Base de Datos pero sincronización en Sheets diferida por 503 (Mensaje ID: ${messageId}).`
+        );
         try {
           await ctx.reply(
             `ℹ️ *Reporte resguardado en base de datos*\n\n` +
@@ -267,14 +280,20 @@ export function registrarHandlers(bot: Bot): void {
             }
           );
         } catch (warnErr: any) {
-          console.warn("[ADVERTENCIA] No se pudo enviar el aviso informativo de sincronización diferida:", warnErr.message);
+          console.warn(
+            "[ADVERTENCIA] No se pudo enviar el aviso informativo de sincronización diferida:",
+            warnErr.message
+          );
         }
       }
     } catch (error: any) {
-      console.error("[ERROR] Error procesando reporte en message handler:", error?.message ?? error);
+      console.error(
+        "[ERROR] Error procesando reporte en message handler:",
+        error?.message ?? error
+      );
       try {
         await reaccionar(ctx, "👎");
-      } catch (_) {}
+      } catch (_) { }
 
       try {
         await ctx.reply(

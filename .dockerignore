@@ -23,7 +23,20 @@ docker-compose.yml
 .DS_Store
 Thumbs.db
 
-# ── Herramientas de desarrollo ────────────────────────────────
+# ── Herramientas de desarrollo, calidad, pruebas y documentación ──
 .vscode/
 .idea/
+.agents/
+docs/
+tests/
+scratch/
+scripts/
+dist/
+coverage/
+.editorconfig
+.prettierrc
+.prettierignore
+.eslintcache
+eslint.config.mjs
 *.md
+*.xlsx

@@ -7,14 +7,8 @@ import {
   setHojaDeCalculoProviderForTesting,
   COLUMNAS,
 } from "../src/services/sheets.js";
-import {
-  createMockWorksheet,
-  createMockGoogleSpreadsheet,
-} from "./helpers/mockSheets.js";
-import {
-  createGoogle503Error,
-  createGoogleNonTransientError,
-} from "./helpers/errorSimulation.js";
+import { createMockWorksheet, createMockGoogleSpreadsheet } from "./helpers/mockSheets.js";
+import { createGoogle503Error, createGoogleNonTransientError } from "./helpers/errorSimulation.js";
 
 test("resilience.sheets - asegurarColumnas recupera tras 1 error 503 en loadHeaderRow", async () => {
   const mockHoja = createMockWorksheet({
@@ -24,7 +18,11 @@ test("resilience.sheets - asegurarColumnas recupera tras 1 error 503 en loadHead
 
   await asegurarColumnas(mockHoja as any);
 
-  assert.equal(mockHoja.stats.loadHeaderCalls, 2, "Debe haber reintentado exactamente una vez tras el 503");
+  assert.equal(
+    mockHoja.stats.loadHeaderCalls,
+    2,
+    "Debe haber reintentado exactamente una vez tras el 503"
+  );
   assert.ok(mockHoja.headerValues.includes(COLUMNAS.ID_MENSAJE));
   assert.ok(mockHoja.headerValues.includes(COLUMNAS.ID_CHAT));
   assert.ok(mockHoja.headerValues.includes(COLUMNAS.ESTADO));
@@ -50,7 +48,11 @@ test("resilience.sheets - asegurarColumnas recupera tras 1 error 503 en setHeade
 
   await asegurarColumnas(mockHoja as any);
 
-  assert.equal(mockHoja.stats.setHeaderCalls, 2, "Debe haber reintentado setHeaderRow tras el 503 inicial");
+  assert.equal(
+    mockHoja.stats.setHeaderCalls,
+    2,
+    "Debe haber reintentado setHeaderRow tras el 503 inicial"
+  );
   assert.ok(mockHoja.headerValues.includes(COLUMNAS.ESTADO));
 });
 
@@ -71,7 +73,10 @@ test("resilience.sheets - asegurarColumnas propaga error cuando los reintentos 5
     "Debe fallar de manera controlada al agotarse todos los intentos configurados"
   );
 
-  assert.ok(mockHoja.stats.loadHeaderCalls >= 3, "Debe haber consumido todos los reintentos permitidos");
+  assert.ok(
+    mockHoja.stats.loadHeaderCalls >= 3,
+    "Debe haber consumido todos los reintentos permitidos"
+  );
 });
 
 test("resilience.sheets - asegurarColumnas falla inmediatamente sin reintentar ante error no transitorio (403)", async () => {
@@ -104,7 +109,11 @@ test("resilience.sheets - setHojaDeCalculoProviderForTesting permite inyectar y 
   setHojaDeCalculoProviderForTesting(async () => mockDoc as any);
 
   const docObtenido = await obtenerHojaDeCalculo();
-  assert.equal(docObtenido, mockDoc as any, "obtenerHojaDeCalculo debe devolver la instancia mock provista");
+  assert.equal(
+    docObtenido,
+    mockDoc as any,
+    "obtenerHojaDeCalculo debe devolver la instancia mock provista"
+  );
 
   // Restablecer provider para no contaminar otras pruebas
   setHojaDeCalculoProviderForTesting(null);

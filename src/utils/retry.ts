@@ -217,8 +217,7 @@ export async function ejecutarConReintento<T>(
   const conJitter = opciones?.conJitter ?? true;
   const esReintentable = opciones?.esReintentable ?? esErrorReintentableGoogle;
   const acelerar =
-    opciones?.acelerarParaPruebas ??
-    (modoPruebasGlobal || process.env.NODE_ENV === "test");
+    opciones?.acelerarParaPruebas ?? (modoPruebasGlobal || process.env.NODE_ENV === "test");
 
   let ultimoError: unknown;
 
@@ -246,7 +245,7 @@ export async function ejecutarConReintento<T>(
 
       // Jitter aleatorio: entre 50% y 100% del tiempo calculado
       let delayFinal = conJitter
-        ? Math.round((delayCalculado / 2) + Math.random() * (delayCalculado / 2))
+        ? Math.round(delayCalculado / 2 + Math.random() * (delayCalculado / 2))
         : delayCalculado;
 
       // Aceleración en modo test

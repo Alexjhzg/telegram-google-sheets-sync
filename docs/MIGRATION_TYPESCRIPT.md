@@ -5,6 +5,7 @@ Este documento detalla la guía paso a paso para realizar la migración progresi
 ---
 
 ## 🎯 Objetivos de la Migración
+
 - **Tipado Estricto**: Eliminar errores en tiempo de ejecución (`TypeError`, `undefined` no controlado) detectándolos durante el desarrollo.
 - **Interfaces de Dominio**: Definir estructuras claras para `ReporteParseado`, `NodoCatalogo`, `ValidacionResultado` y los eventos de Telegram (`grammy`).
 - **Autocompletado y Productividad**: Mejorar el soporte en el editor (VS Code, Antigravity) para todas las funciones del proyecto.

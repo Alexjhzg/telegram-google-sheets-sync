@@ -10,14 +10,15 @@ import {
   sheetsMutex,
   COLUMNAS,
 } from "../src/services/sheets.js";
-import {
-  createMockWorksheet,
-  createMockGoogleSpreadsheet,
-} from "./helpers/mockSheets.js";
+import { createMockWorksheet, createMockGoogleSpreadsheet } from "./helpers/mockSheets.js";
 import { createGoogle503Error } from "./helpers/errorSimulation.js";
 import { DatosReporteProcesar } from "../src/types/index.js";
 
-function generarDatosReporte(nodo = 16039, municipio = "Maturín", messageId = 55555): DatosReporteProcesar {
+function generarDatosReporte(
+  nodo = 16039,
+  municipio = "Maturín",
+  messageId = 55555
+): DatosReporteProcesar {
   return {
     reporte: {
       municipio,
@@ -121,11 +122,21 @@ test("adversarial - flapping multi-etapa: 503 en getRows, setHeaderRow y row.sav
   // Configurar hoja con fallos 503 transitorios (1 fallo por operación, recupera en intento 2)
   const hojaTelegram = createMockWorksheet({
     title: "registros_telegram",
-    headers: ["Municipio", "Nodo", "Total Verificadores", "Bloque 1 (9am)", "Bloque 2 (2pm)", "Bloque 3 (6pm)", "Fecha", "Hora", "Remitente"],
+    headers: [
+      "Municipio",
+      "Nodo",
+      "Total Verificadores",
+      "Bloque 1 (9am)",
+      "Bloque 2 (2pm)",
+      "Bloque 3 (6pm)",
+      "Fecha",
+      "Hora",
+      "Remitente",
+    ],
     rows: [{ Municipio: "Maturín", Nodo: "16039", Fecha: "14/08/2026" }],
-    failAttemptsOnGetRows: 1,    // Fallo 1: getRows falla con 503, intento 2 pasa
-    failAttemptsOnSetHeader: 1,  // Fallo 2: setHeaderRow falla con 503 en asegurarColumnas, intento 2 pasa
-    failAttemptsOnSave: 1,       // Fallo 3: fila.save() falla con 503, intento 2 pasa
+    failAttemptsOnGetRows: 1, // Fallo 1: getRows falla con 503, intento 2 pasa
+    failAttemptsOnSetHeader: 1, // Fallo 2: setHeaderRow falla con 503 en asegurarColumnas, intento 2 pasa
+    failAttemptsOnSave: 1, // Fallo 3: fila.save() falla con 503, intento 2 pasa
   });
 
   const hojaNodos = createMockWorksheet({
@@ -146,8 +157,16 @@ test("adversarial - flapping multi-etapa: 503 en getRows, setHeaderRow y row.sav
     const payload = generarDatosReporte();
     const resultado = await procesarYGuardarReporte(payload);
 
-    assert.equal(resultado.valido, true, "El reporte debe ser válido a pesar del flapping multi-etapa");
-    assert.equal(resultado.sincronizadoSheets, true, "Debe sincronizar con Sheets tras recuperarse");
+    assert.equal(
+      resultado.valido,
+      true,
+      "El reporte debe ser válido a pesar del flapping multi-etapa"
+    );
+    assert.equal(
+      resultado.sincronizadoSheets,
+      true,
+      "Debe sincronizar con Sheets tras recuperarse"
+    );
     assert.equal(hojaTelegram.stats.getRowsCalls, 2, "getRows debió reintentarse");
     assert.equal(hojaTelegram.stats.setHeaderCalls, 2, "setHeaderRow debió reintentarse");
     assert.equal(hojaTelegram.stats.saveCalls, 2, "row.save debió reintentarse");
@@ -209,7 +228,11 @@ test("adversarial - flapping secuencial entre reportes consecutivos: reporte 1 (
     const res2 = await procesarYGuardarReporte(generarDatosReporte(16040, "Maturín", 102));
     if (config.db.enabled) {
       assert.equal(res2.valido, true, "Reporte 2 debe degradar graciosamente en DB");
-      assert.equal(res2.sincronizadoSheets, false, "Reporte 2 tiene sincronización diferida en Sheets");
+      assert.equal(
+        res2.sincronizadoSheets,
+        false,
+        "Reporte 2 tiene sincronización diferida en Sheets"
+      );
       assert.equal(res2.persistidoDB, true, "Reporte 2 resguardado en DB");
     } else {
       assert.equal(res2.valido, false, "Reporte 2 sin DB debe retornar fallo controlado");
@@ -219,7 +242,11 @@ test("adversarial - flapping secuencial entre reportes consecutivos: reporte 1 (
     // 3. Reporte 3 (Inmediato Éxito -> Recuperación del sistema)
     const res3 = await procesarYGuardarReporte(generarDatosReporte(16041, "Maturín", 103));
     assert.equal(res3.valido, true, "Reporte 3 debe procesarse con éxito inmediatamente");
-    assert.equal(res3.sincronizadoSheets, true, "Reporte 3 debe sincronizar normalmente con Sheets");
+    assert.equal(
+      res3.sincronizadoSheets,
+      true,
+      "Reporte 3 debe sincronizar normalmente con Sheets"
+    );
 
     // Verificar que sheetsMutex sigue funcional y desbloqueado
     let lockExclusivo = false;
@@ -272,7 +299,11 @@ test("adversarial - 503 permanente con DB activa: degradación graciosa, sincron
     const payload = generarDatosReporte(16039, "Maturín", 7001);
     const resultado = await procesarYGuardarReporte(payload);
 
-    assert.equal(resultado.valido, true, "Con DB activa, el reporte debe ser aceptado con degradación");
+    assert.equal(
+      resultado.valido,
+      true,
+      "Con DB activa, el reporte debe ser aceptado con degradación"
+    );
     assert.equal(resultado.sincronizadoSheets, false, "sincronizadoSheets debe ser false");
     assert.equal(resultado.persistidoDB, true, "persistidoDB debe ser true");
     assert.equal(resultado.totalFinal, 2);
@@ -314,7 +345,7 @@ test("adversarial - 503 permanente con DB activa en message handler: usuario rec
   const prevEndHour = config.app.workEndHour;
 
   config.db.enabled = true;
-  config.app.workStartHour = 0;  // Garantizar horario laboral en la prueba
+  config.app.workStartHour = 0; // Garantizar horario laboral en la prueba
   config.app.workEndHour = 24;
 
   try {
@@ -332,7 +363,11 @@ test("adversarial - 503 permanente con DB activa en message handler: usuario rec
     await bot.handleUpdate(update as any);
 
     // 1. bot.catch NUNCA debe haber sido disparado
-    assert.equal(getBotCatchError(), null, "bot.catch no debe capturar errores; deben estar contenidos");
+    assert.equal(
+      getBotCatchError(),
+      null,
+      "bot.catch no debe capturar errores; deben estar contenidos"
+    );
 
     // 2. Debe haber reaccionado positivamente (porque el reporte fue aceptado en BD)
     assert.ok(reaccionesEnviadas.length > 0, "Debe registrarse reacción");
@@ -413,7 +448,9 @@ test("adversarial - 503 permanente con DB inactiva en message handler: envía av
     assert.ok(mensajesEnviados.length > 0, "Debe enviar mensaje al usuario");
     const msg = mensajesEnviados[0].text;
     assert.ok(
-      msg.includes("503") || msg.includes("Conexión temporalmente no disponible") || msg.includes("Aviso de servicio"),
+      msg.includes("503") ||
+        msg.includes("Conexión temporalmente no disponible") ||
+        msg.includes("Aviso de servicio"),
       `El mensaje debe informar al usuario sobre error 503 o conexión temporalmente no disponible. Recibido: ${msg}`
     );
   } finally {
@@ -523,29 +560,53 @@ test("adversarial.cleanup - fallos 503 intercalados en lote: filas 1, 3, 5 falla
     const f1005 = filasFinales.find((f) => f.get(COLUMNAS.NODO) === "1005");
 
     assert.ok(f1001, "Fila 1001 debe existir");
-    assert.equal(f1001.get(COLUMNAS.TOTAL_VERIFICADORES), "5", "Fila 1001 retiene su valor previo ante fallo 503");
+    assert.equal(
+      f1001.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "5",
+      "Fila 1001 retiene su valor previo ante fallo 503"
+    );
 
     assert.ok(f1003, "Fila 1003 debe existir");
-    assert.equal(f1003.get(COLUMNAS.TOTAL_VERIFICADORES), "3", "Fila 1003 retiene su valor previo ante fallo 503");
+    assert.equal(
+      f1003.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "3",
+      "Fila 1003 retiene su valor previo ante fallo 503"
+    );
 
     assert.ok(f1005, "Fila 1005 debe existir");
-    assert.equal(f1005.get(COLUMNAS.TOTAL_VERIFICADORES), "1", "Fila 1005 retiene su valor previo ante fallo 503");
+    assert.equal(
+      f1005.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "1",
+      "Fila 1005 retiene su valor previo ante fallo 503"
+    );
 
     // 2. Filas que tuvieron éxito (Nodos 1002 y 1004): se resetearon a cero a pesar de las fallas en las otras filas
     const f1002 = filasFinales.find((f) => f.get(COLUMNAS.NODO) === "1002");
     const f1004 = filasFinales.find((f) => f.get(COLUMNAS.NODO) === "1004");
 
     assert.ok(f1002, "Fila 1002 debe existir");
-    assert.equal(f1002.get(COLUMNAS.TOTAL_VERIFICADORES), "0", "Fila 1002 debió resetearse exitosamente");
+    assert.equal(
+      f1002.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "0",
+      "Fila 1002 debió resetearse exitosamente"
+    );
     assert.equal(f1002.get(COLUMNAS.ESTADO), "", "Estado de fila 1002 debió limpiarse");
 
     assert.ok(f1004, "Fila 1004 debe existir");
-    assert.equal(f1004.get(COLUMNAS.TOTAL_VERIFICADORES), "0", "Fila 1004 debió resetearse exitosamente");
+    assert.equal(
+      f1004.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "0",
+      "Fila 1004 debió resetearse exitosamente"
+    );
     assert.equal(f1004.get(COLUMNAS.ESTADO), "", "Estado de fila 1004 debió limpiarse");
 
     // 3. Confirmar que ninguna excepción huérfana escapó
     await new Promise((r) => setTimeout(r, 20));
-    assert.equal(unhandledCaptured, false, "Cero unhandled rejections durante escaneo con fallos intercalados");
+    assert.equal(
+      unhandledCaptured,
+      false,
+      "Cero unhandled rejections durante escaneo con fallos intercalados"
+    );
   } finally {
     config.app.cleanupRequestDelayMs = prevDelay;
     process.off("unhandledRejection", unhandledHandler);
@@ -619,7 +680,11 @@ test("adversarial - concurrencia: múltiples reportes en paralelo con 503 interm
 
     for (const res of resultados) {
       assert.equal(res.valido, true, "Todos los reportes concurrentes deben ser válidos");
-      assert.equal(res.sincronizadoSheets, true, "Todos deben sincronizarse en Sheets tras recuperarse de 503");
+      assert.equal(
+        res.sincronizadoSheets,
+        true,
+        "Todos deben sincronizarse en Sheets tras recuperarse de 503"
+      );
     }
 
     assert.equal(unhandledCaptured, false, "Cero unhandled rejections durante ráfaga concurrente");
@@ -708,4 +773,3 @@ test("adversarial - eliminarReporte bajo 503 permanente retorna false graciosame
     setHojaDeCalculoProviderForTesting(null);
   }
 });
-

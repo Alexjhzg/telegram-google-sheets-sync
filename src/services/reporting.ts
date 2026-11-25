@@ -44,7 +44,10 @@ export function obtenerLeyendaEmojis(): string {
 /**
  * Construye el mensaje consolidado general del Estado Monagas desde 'formato_reporte'.
  */
-export async function obtenerConsolidadoGeneral(doc: GoogleSpreadsheet, corte: number): Promise<string> {
+export async function obtenerConsolidadoGeneral(
+  doc: GoogleSpreadsheet,
+  corte: number
+): Promise<string> {
   const sheet = doc.sheetsByTitle["formato_reporte"];
   if (!sheet) {
     throw new Error("No se encontró la hoja 'formato_reporte' para generar el reporte diario.");
@@ -82,7 +85,7 @@ export async function obtenerConsolidadoGeneral(doc: GoogleSpreadsheet, corte: n
   const linea2pm = corte >= 2 ? `2:00 pm ${v2pm}/${limite} = ${pct2pm}%` : `2:00 pm`;
   const linea6pm = corte >= 3 ? `6:00 pm ${v6pm}/${limite} = ${pct6pm}%` : `6:00 pm`;
 
-  let vAcumulado = 0;
+  let vAcumulado: number;
   if (corte === 1) vAcumulado = v9am;
   else if (corte === 2) vAcumulado = v9am + v2pm;
   else vAcumulado = vTotal;
@@ -90,7 +93,12 @@ export async function obtenerConsolidadoGeneral(doc: GoogleSpreadsheet, corte: n
   const pctAcumulado = ((vAcumulado / limite) * 100).toFixed(2).replace(".", ",");
 
   const opcionesDia: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", weekday: "long" };
-  const opcionesFecha: Intl.DateTimeFormatOptions = { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" };
+  const opcionesFecha: Intl.DateTimeFormatOptions = {
+    timeZone: "America/Caracas",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  };
   const fechaStr = new Intl.DateTimeFormat("es-VE", opcionesFecha).format(new Date());
   const diaSemanaRaw = new Intl.DateTimeFormat("es-VE", opcionesDia).format(new Date());
   const diaSemana = diaSemanaRaw.charAt(0).toUpperCase() + diaSemanaRaw.slice(1);
@@ -109,7 +117,10 @@ export async function obtenerConsolidadoGeneral(doc: GoogleSpreadsheet, corte: n
 /**
  * Obtiene el desglose exclusivo de verificadores faltantes agrupados por municipio y nodo.
  */
-export async function obtenerDesgloseFaltantes(doc: GoogleSpreadsheet, corte: number): Promise<{ mensajeDesglose: string; totalFaltantes: number; limiteTotal: number }> {
+export async function obtenerDesgloseFaltantes(
+  doc: GoogleSpreadsheet,
+  corte: number
+): Promise<{ mensajeDesglose: string; totalFaltantes: number; limiteTotal: number }> {
   const hojaNodos = doc.sheetsByTitle["verificadores_nodo"];
   const hojaTelegram = doc.sheetsByTitle["registros_telegram"];
 
@@ -146,7 +157,10 @@ export async function obtenerDesgloseFaltantes(doc: GoogleSpreadsheet, corte: nu
     const key = `${municipio.toLowerCase()}-${nodo}`;
     const rowTelegram = telegramMap.get(key);
 
-    let b1 = 0, b2 = 0, b3 = 0, totalMsg = 0;
+    let b1 = 0,
+      b2 = 0,
+      b3 = 0,
+      totalMsg = 0;
     let idMensaje = "";
     let fechaFila = "";
 
@@ -159,13 +173,13 @@ export async function obtenerDesgloseFaltantes(doc: GoogleSpreadsheet, corte: nu
       fechaFila = (rowTelegram.get(COLUMNAS.FECHA) || "").trim();
     }
 
-    let reportadoNodo = 0;
+    let reportadoNodo: number;
     if (corte <= 1) {
       reportadoNodo = b1;
     } else if (corte === 2) {
       reportadoNodo = b1 + b2;
     } else {
-      reportadoNodo = totalMsg > 0 ? totalMsg : (b1 + b2 + b3);
+      reportadoNodo = totalMsg > 0 ? totalMsg : b1 + b2 + b3;
     }
 
     const faltantesNodo = Math.max(0, limiteNodo - reportadoNodo);
@@ -198,9 +212,10 @@ export async function obtenerDesgloseFaltantes(doc: GoogleSpreadsheet, corte: nu
     });
   }
 
-  const pctFaltantesEstado = limiteEstado > 0
-    ? ((faltantesEstado / limiteEstado) * 100).toFixed(2).replace(".", ",")
-    : "0,00";
+  const pctFaltantesEstado =
+    limiteEstado > 0
+      ? ((faltantesEstado / limiteEstado) * 100).toFixed(2).replace(".", ",")
+      : "0,00";
 
   if (faltantesEstado === 0) {
     const mensajeDesglose =
@@ -226,7 +241,7 @@ export async function obtenerDesgloseFaltantes(doc: GoogleSpreadsheet, corte: nu
       .sort((a: any, b: any) => a.nodo - b.nodo);
 
     for (const n of nodosFaltantes) {
-      let etiquetaEstado = "";
+      let etiquetaEstado: string;
       if (!n.tieneReporte) {
         etiquetaEstado = `(Sin reporte ❌)`;
       } else if (n.reportadoNodo === 0) {
@@ -241,7 +256,11 @@ export async function obtenerDesgloseFaltantes(doc: GoogleSpreadsheet, corte: nu
     mensajeDesglose += `\n`;
   }
 
-  return { mensajeDesglose: mensajeDesglose.trim(), totalFaltantes: faltantesEstado, limiteTotal: limiteEstado };
+  return {
+    mensajeDesglose: mensajeDesglose.trim(),
+    totalFaltantes: faltantesEstado,
+    limiteTotal: limiteEstado,
+  };
 }
 
 /**
@@ -282,13 +301,19 @@ export async function enviarReporteDiario(api: Api, corte: number = 3): Promise<
       }
     }
 
-    if (!chatId) {
-      chatId = "-1003785032543";
+    if (chatId) {
+      console.log(
+        `[INFO] Enviando reporte consolidado general (Corte: ${corte}) al Chat ID principal: ${chatId}`
+      );
+      await api.sendMessage(chatId, mensajeConsolidado, { parse_mode: "Markdown" });
+      console.log(
+        `[INFO] Reporte consolidado general del corte ${corte} enviado con éxito al grupo principal.`
+      );
+    } else {
+      console.warn(
+        `[ADVERTENCIA] No se configuró TELEGRAM_REPORT_CHAT_ID ni se encontró ID de chat en la hoja. Omitiendo envío del reporte consolidado (Corte: ${corte}) al grupo principal.`
+      );
     }
-
-    console.log(`[INFO] Enviando reporte consolidado general (Corte: ${corte}) al Chat ID principal: ${chatId}`);
-    await api.sendMessage(chatId, mensajeConsolidado, { parse_mode: "Markdown" });
-    console.log(`[INFO] Reporte consolidado general del corte ${corte} enviado con éxito al grupo principal.`);
 
     if (config.telegram.managerChatIds.length > 0) {
       for (const managerId of config.telegram.managerChatIds) {
@@ -300,13 +325,21 @@ export async function enviarReporteDiario(api: Api, corte: number = 3): Promise<
             await api.sendMessage(managerId, mensajeDesglose, { parse_mode: "Markdown" });
             await api.sendMessage(managerId, mensajeLeyenda, { parse_mode: "Markdown" });
           }
-          console.log(`[INFO] Reporte del corte ${corte} enviado individualmente a ${managerId} con éxito.`);
+          console.log(
+            `[INFO] Reporte del corte ${corte} enviado individualmente a ${managerId} con éxito.`
+          );
         } catch (managerErr) {
-          console.error(`[ERROR] Falló el envío del reporte al encargado ${managerId}:`, managerErr);
+          console.error(
+            `[ERROR] Falló el envío del reporte al encargado ${managerId}:`,
+            managerErr
+          );
         }
       }
     }
   } catch (err) {
-    console.error(`[ERROR] Falló la generación/envío del reporte consolidado del corte ${corte}:`, err);
+    console.error(
+      `[ERROR] Falló la generación/envío del reporte consolidado del corte ${corte}:`,
+      err
+    );
   }
 }

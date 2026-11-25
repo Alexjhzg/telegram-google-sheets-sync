@@ -14,7 +14,9 @@ async function configurarReportesNativos() {
 
     const hojaNodos = doc.sheetsByTitle["verificadores_nodo"];
     if (!hojaNodos) {
-      console.error("[ERROR] No se encontró la hoja 'verificadores_nodo' para estructurar los reportes.");
+      console.error(
+        "[ERROR] No se encontró la hoja 'verificadores_nodo' para estructurar los reportes."
+      );
       process.exit(1);
     }
 
@@ -30,7 +32,7 @@ async function configurarReportesNativos() {
 
     // ── 1. PESTAÑA 'reporte_nodo' ─────────────────────────────────────────────
     console.log("[2/5] Configurando pestaña 'reporte_nodo'...");
-    
+
     let sheetReporte = doc.sheetsByTitle["reporte_nodo"];
     const sheetVieja = doc.sheetsByTitle["reporte_diario"];
 
@@ -80,12 +82,15 @@ async function configurarReportesNativos() {
       sheetReporte.getCell(rowIdx, 2).value = limVal;
 
       // Fórmulas
-      sheetReporte.getCell(rowIdx, 3).formula = `=ROUND(IFERROR(SUMIFS(registros_historicos_telegram!C:C, registros_historicos_telegram!A:A, A${numFila}, registros_historicos_telegram!B:B, B${numFila}, registros_historicos_telegram!G:G, G${numFila}), 0), 0)`;
+      sheetReporte.getCell(rowIdx, 3).formula =
+        `=ROUND(IFERROR(SUMIFS(registros_historicos_telegram!C:C, registros_historicos_telegram!A:A, A${numFila}, registros_historicos_telegram!B:B, B${numFila}, registros_historicos_telegram!G:G, G${numFila}), 0), 0)`;
       sheetReporte.getCell(rowIdx, 4).formula = `=ROUND(C${numFila}-D${numFila}, 0)`;
-      sheetReporte.getCell(rowIdx, 5).formula = `=IF(D${numFila}>0, "S", IF(COUNTIFS(registros_historicos_telegram!B:B, B${numFila}, registros_historicos_telegram!G:G, G${numFila}, registros_historicos_telegram!J:J, "<>")>0, "S", "N"))`;
-      sheetReporte.getCell(rowIdx, 6).formula = rowIdx === 1
-        ? `=IF(ISBLANK($I$1), TODAY() - 1, IF(ISNUMBER($I$1), $I$1, DATEVALUE($I$1)))`
-        : `=G2`;
+      sheetReporte.getCell(rowIdx, 5).formula =
+        `=IF(D${numFila}>0, "S", IF(COUNTIFS(registros_historicos_telegram!B:B, B${numFila}, registros_historicos_telegram!G:G, G${numFila}, registros_historicos_telegram!J:J, "<>")>0, "S", "N"))`;
+      sheetReporte.getCell(rowIdx, 6).formula =
+        rowIdx === 1
+          ? `=IF(ISBLANK($I$1), TODAY() - 1, IF(ISNUMBER($I$1), $I$1, DATEVALUE($I$1)))`
+          : `=G2`;
       sheetReporte.getCell(rowIdx, 6).numberFormat = { type: "DATE", pattern: "dd/mm/yyyy" };
     }
 
@@ -96,10 +101,14 @@ async function configurarReportesNativos() {
 
     sheetReporte.getCell(filaTotalNodoIdx, 0).value = "TOTAL";
     sheetReporte.getCell(filaTotalNodoIdx, 1).value = null;
-    sheetReporte.getCell(filaTotalNodoIdx, 2).formula = `=ROUND(SUM(C${primeraFilaNodos}:C${ultimaFilaNodos}), 0)`;
-    sheetReporte.getCell(filaTotalNodoIdx, 3).formula = `=ROUND(SUM(D${primeraFilaNodos}:D${ultimaFilaNodos}), 0)`;
-    sheetReporte.getCell(filaTotalNodoIdx, 4).formula = `=ROUND(SUM(E${primeraFilaNodos}:E${ultimaFilaNodos}), 0)`;
-    sheetReporte.getCell(filaTotalNodoIdx, 5).formula = `=ROUND(COUNTIFS(F${primeraFilaNodos}:F${ultimaFilaNodos}, "N"), 0)`;
+    sheetReporte.getCell(filaTotalNodoIdx, 2).formula =
+      `=ROUND(SUM(C${primeraFilaNodos}:C${ultimaFilaNodos}), 0)`;
+    sheetReporte.getCell(filaTotalNodoIdx, 3).formula =
+      `=ROUND(SUM(D${primeraFilaNodos}:D${ultimaFilaNodos}), 0)`;
+    sheetReporte.getCell(filaTotalNodoIdx, 4).formula =
+      `=ROUND(SUM(E${primeraFilaNodos}:E${ultimaFilaNodos}), 0)`;
+    sheetReporte.getCell(filaTotalNodoIdx, 5).formula =
+      `=ROUND(COUNTIFS(F${primeraFilaNodos}:F${ultimaFilaNodos}, "N"), 0)`;
     sheetReporte.getCell(filaTotalNodoIdx, 6).formula = `=G2`;
 
     await sheetReporte.saveUpdatedCells();
@@ -149,12 +158,16 @@ async function configurarReportesNativos() {
 
     for (const mun of listaMunicipios) {
       const numFilaM = filaActual + 1; // Fila 2, 3, 4...
-      
+
       sheetMunicipio.getCell(filaActual, 0).value = mun;
-      sheetMunicipio.getCell(filaActual, 1).formula = `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!C:C), 0)`;
-      sheetMunicipio.getCell(filaActual, 2).formula = `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!D:D), 0)`;
-      sheetMunicipio.getCell(filaActual, 3).formula = `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!E:E), 0)`;
-      sheetMunicipio.getCell(filaActual, 4).formula = `=ROUND(COUNTIFS(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!F:F, "N"), 0)`;
+      sheetMunicipio.getCell(filaActual, 1).formula =
+        `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!C:C), 0)`;
+      sheetMunicipio.getCell(filaActual, 2).formula =
+        `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!D:D), 0)`;
+      sheetMunicipio.getCell(filaActual, 3).formula =
+        `=ROUND(SUMIF(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!E:E), 0)`;
+      sheetMunicipio.getCell(filaActual, 4).formula =
+        `=ROUND(COUNTIFS(reporte_nodo!A:A, A${numFilaM}, reporte_nodo!F:F, "N"), 0)`;
       sheetMunicipio.getCell(filaActual, 5).formula = `=reporte_nodo!G2`;
 
       filaActual++;
@@ -163,10 +176,14 @@ async function configurarReportesNativos() {
     const ultimaFilaMunData = filaActual;
 
     sheetMunicipio.getCell(filaActual, 0).value = "TOTAL";
-    sheetMunicipio.getCell(filaActual, 1).formula = `=ROUND(SUM(B${primeraFilaMunData}:B${ultimaFilaMunData}), 0)`;
-    sheetMunicipio.getCell(filaActual, 2).formula = `=ROUND(SUM(C${primeraFilaMunData}:C${ultimaFilaMunData}), 0)`;
-    sheetMunicipio.getCell(filaActual, 3).formula = `=ROUND(SUM(D${primeraFilaMunData}:D${ultimaFilaMunData}), 0)`;
-    sheetMunicipio.getCell(filaActual, 4).formula = `=ROUND(SUM(E${primeraFilaMunData}:E${ultimaFilaMunData}), 0)`;
+    sheetMunicipio.getCell(filaActual, 1).formula =
+      `=ROUND(SUM(B${primeraFilaMunData}:B${ultimaFilaMunData}), 0)`;
+    sheetMunicipio.getCell(filaActual, 2).formula =
+      `=ROUND(SUM(C${primeraFilaMunData}:C${ultimaFilaMunData}), 0)`;
+    sheetMunicipio.getCell(filaActual, 3).formula =
+      `=ROUND(SUM(D${primeraFilaMunData}:D${ultimaFilaMunData}), 0)`;
+    sheetMunicipio.getCell(filaActual, 4).formula =
+      `=ROUND(SUM(E${primeraFilaMunData}:E${ultimaFilaMunData}), 0)`;
     sheetMunicipio.getCell(filaActual, 5).formula = `=reporte_nodo!G2`;
 
     await sheetMunicipio.saveUpdatedCells();
@@ -174,7 +191,7 @@ async function configurarReportesNativos() {
 
     // ── 3. APLICAR REGLAS DE FORMATO CONDICIONAL (LIGHT RED 2) ──────────────────
     console.log("[6/6] Aplicando reglas de formato condicional (Light Red 2)...");
-    
+
     // Regla 1: reporte_nodo - Columna E (Verificadores sin Salida a Campo) > 0
     const requestFormatNodoSinSalida = {
       addConditionalFormatRule: {
@@ -290,7 +307,7 @@ async function configurarReportesNativos() {
               type: "CUSTOM_FORMULA",
               values: [
                 {
-                  userEnteredValue: '=AND($E2>0, $D2>0)',
+                  userEnteredValue: "=AND($E2>0, $D2>0)",
                 },
               ],
             },
@@ -356,7 +373,7 @@ async function configurarReportesNativos() {
               type: "CUSTOM_FORMULA",
               values: [
                 {
-                  userEnteredValue: '=AND($D2<>$C2, $D2>0)',
+                  userEnteredValue: "=AND($D2<>$C2, $D2>0)",
                 },
               ],
             },
@@ -422,7 +439,7 @@ async function configurarReportesNativos() {
               type: "CUSTOM_FORMULA",
               values: [
                 {
-                  userEnteredValue: '=AND($C2<>$B2, $C2>0)',
+                  userEnteredValue: "=AND($C2<>$B2, $C2>0)",
                 },
               ],
             },
@@ -449,9 +466,13 @@ async function configurarReportesNativos() {
       requestFormatMunSinSalida,
       requestFormatMunNoReportados,
     ]);
-    console.log("[INFO] ✅ Reglas de formato condicional (Rojo y Amarillo) aplicadas con éxito en ambas pestañas.");
+    console.log(
+      "[INFO] ✅ Reglas de formato condicional (Rojo y Amarillo) aplicadas con éxito en ambas pestañas."
+    );
 
-    console.log("=== ✅ RESTRUCTURACIÓN Y CONFIGURACIÓN DE FORMATO CONDICIONAL COMPLETADA DE FORMA EXITOSA ===");
+    console.log(
+      "=== ✅ RESTRUCTURACIÓN Y CONFIGURACIÓN DE FORMATO CONDICIONAL COMPLETADA DE FORMA EXITOSA ==="
+    );
   } catch (err) {
     console.error("[ERROR FATAL] Falló la configuración de las pestañas:", err);
     process.exit(1);

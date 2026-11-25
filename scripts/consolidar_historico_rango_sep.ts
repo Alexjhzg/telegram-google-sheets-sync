@@ -53,11 +53,13 @@ async function consolidarRangoSep() {
           const nod = parseInt(String(r.nodo), 10);
           reportesDBMap.set(nod, r);
         });
-        console.log(`[INFO] Encontrados ${reportesDBMap.size} reportes en Supabase DB para ${fechaStd}.`);
+        console.log(
+          `[INFO] Encontrados ${reportesDBMap.size} reportes en Supabase DB para ${fechaStd}.`
+        );
 
         // 2. Obtener filas de la hoja histórica
         let filas = await sheetHistorica.getRows();
-        let filasFecha = filas.filter(f => {
+        let filasFecha = filas.filter((f) => {
           const rawF = (f.get(COLUMNAS.FECHA) || "").trim();
           return estandarizarFecha(rawF) === fechaStd || rawF === fechaStd;
         });
@@ -67,7 +69,9 @@ async function consolidarRangoSep() {
         // 3. Si hay duplicados (ej: 92 filas), eliminar las sobrantes conservando las primeras 46
         if (filasFecha.length > 46) {
           const sobrantes = filasFecha.slice(46);
-          console.log(`[INFO] Detectadas ${filasFecha.length} filas (duplicadas). Eliminando ${sobrantes.length} filas sobrantes...`);
+          console.log(
+            `[INFO] Detectadas ${filasFecha.length} filas (duplicadas). Eliminando ${sobrantes.length} filas sobrantes...`
+          );
           for (let i = sobrantes.length - 1; i >= 0; i--) {
             await sobrantes[i].delete();
             await delay(1200); // Pausa de seguridad para evitar superar cuota API
@@ -76,7 +80,7 @@ async function consolidarRangoSep() {
 
           // Recargar filas después del borrado
           filas = await sheetHistorica.getRows();
-          filasFecha = filas.filter(f => {
+          filasFecha = filas.filter((f) => {
             const rawF = (f.get(COLUMNAS.FECHA) || "").trim();
             return estandarizarFecha(rawF) === fechaStd || rawF === fechaStd;
           });
@@ -89,15 +93,17 @@ async function consolidarRangoSep() {
         }
 
         // 4. Actualizar celdas en lote con datos de DB
-        const minRowIndex = Math.min(...filasFecha.map(f => f.rowNumber - 1));
-        const maxRowIndex = Math.max(...filasFecha.map(f => f.rowNumber - 1));
+        const minRowIndex = Math.min(...filasFecha.map((f) => f.rowNumber - 1));
+        const maxRowIndex = Math.max(...filasFecha.map((f) => f.rowNumber - 1));
 
-        console.log(`[INFO] Cargando celdas desde fila ${minRowIndex + 1} hasta ${maxRowIndex + 1}...`);
+        console.log(
+          `[INFO] Cargando celdas desde fila ${minRowIndex + 1} hasta ${maxRowIndex + 1}...`
+        );
         await sheetHistorica.loadCells({
           startRowIndex: minRowIndex,
           endRowIndex: maxRowIndex + 1,
           startColumnIndex: 0,
-          endColumnIndex: 12
+          endColumnIndex: 12,
         });
 
         await sheetHistorica.loadHeaderRow();
@@ -121,8 +127,15 @@ async function consolidarRangoSep() {
           const nod = parseInt(fila.get(COLUMNAS.NODO) || "0", 10);
           const repDB = reportesDBMap.get(nod);
 
-          let total = 0, b1 = 0, b2 = 0, b3 = 0;
-          let hora = "", remitente = "", msgId = "", chatId = "", estado = "";
+          let total = 0,
+            b1 = 0,
+            b2 = 0,
+            b3 = 0;
+          let hora = "",
+            remitente = "",
+            msgId = "",
+            chatId = "",
+            estado = "";
 
           if (repDB) {
             total = Number(repDB.total_verificadores ?? 0);
@@ -149,7 +162,9 @@ async function consolidarRangoSep() {
           actualizados++;
         }
 
-        console.log(`[INFO] Guardando celdas actualizadas para ${actualizados} nodos en 1 request batch...`);
+        console.log(
+          `[INFO] Guardando celdas actualizadas para ${actualizados} nodos en 1 request batch...`
+        );
         await sheetHistorica.saveUpdatedCells();
         console.log(`[ÉXITO] Fecha ${fechaStd} consolidada con éxito.`);
 
@@ -160,7 +175,6 @@ async function consolidarRangoSep() {
       console.log("\n==================================================");
       console.log(" ✅ CONSOLIDACIÓN DEL 04 AL 06 DE SEPTIEMBRE FINALIZADA");
       console.log("==================================================");
-
     } catch (err: any) {
       console.error("❌ Error durante la consolidación del rango:", err.message || err);
     }

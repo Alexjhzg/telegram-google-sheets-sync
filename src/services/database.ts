@@ -37,7 +37,10 @@ export function esDBActiva(): boolean {
 /**
  * Valida un Municipio y Nodo contra el catálogo oficial en la Base de Datos.
  */
-export async function validarMunicipioNodoDB(municipio: string, nodo: number | string): Promise<ValidacionResultado> {
+export async function validarMunicipioNodoDB(
+  municipio: string,
+  nodo: number | string
+): Promise<ValidacionResultado> {
   const client = obtenerClienteDB();
   if (!client) {
     throw new Error("La base de datos relacional no está configurada");
@@ -67,15 +70,28 @@ export async function validarMunicipioNodoDB(municipio: string, nodo: number | s
     .maybeSingle();
 
   if (errNodo) {
-    console.error("[ERROR] Error al consultar combinación municipio+nodo en Base de Datos:", errNodo.message);
+    console.error(
+      "[ERROR] Error al consultar combinación municipio+nodo en Base de Datos:",
+      errNodo.message
+    );
     throw errNodo;
   }
 
   if (!registroOficial) {
     if (!municipioExiste) {
-      return { valido: false, razon: "MUNICIPIO_INCORRECTO", limiteVerificadores: 0, municipioOficial: municipio };
+      return {
+        valido: false,
+        razon: "MUNICIPIO_INCORRECTO",
+        limiteVerificadores: 0,
+        municipioOficial: municipio,
+      };
     } else {
-      return { valido: false, razon: "NODO_INCORRECTO", limiteVerificadores: 0, municipioOficial: municipioOficialDetectado };
+      return {
+        valido: false,
+        razon: "NODO_INCORRECTO",
+        limiteVerificadores: 0,
+        municipioOficial: municipioOficialDetectado,
+      };
     }
   }
 
@@ -119,7 +135,9 @@ export async function guardarOActualizarReporteDB(datos: any): Promise<any> {
     catalogoNodoId = catalogoRow?.id ?? null;
 
     if (!catalogoNodoId) {
-      console.warn(`[ADVERTENCIA] No se encontró catalogo_nodo_id para municipio="${munNormalizado}", nodo=${nodInt}. Se guardará sin FK.`);
+      console.warn(
+        `[ADVERTENCIA] No se encontró catalogo_nodo_id para municipio="${munNormalizado}", nodo=${nodInt}. Se guardará sin FK.`
+      );
     }
   } catch (errLookup: any) {
     console.warn("[ADVERTENCIA] No se pudo resolver catalogo_nodo_id:", errLookup.message);
@@ -151,14 +169,18 @@ export async function guardarOActualizarReporteDB(datos: any): Promise<any> {
 
   if (error) {
     if (error.code === "23503") {
-      console.warn(`[ADVERTENCIA] No se pudo guardar en BD: El nodo ${datos.nodo} (${datos.municipioOficial}) no se encuentra en nodos_catalogo.`);
+      console.warn(
+        `[ADVERTENCIA] No se pudo guardar en BD: El nodo ${datos.nodo} (${datos.municipioOficial}) no se encuentra en nodos_catalogo.`
+      );
     } else {
       console.error("[ERROR] Error al hacer upsert en la Base de Datos:", error.message);
     }
     throw error;
   }
 
-  console.log(`[INFO] Reporte guardado/actualizado exitosamente en Base de Datos (Nodo: ${datos.nodo}, Fecha: ${datos.fecha}).`);
+  console.log(
+    `[INFO] Reporte guardado/actualizado exitosamente en Base de Datos (Nodo: ${datos.nodo}, Fecha: ${datos.fecha}).`
+  );
   return data;
 }
 
@@ -166,29 +188,43 @@ export async function guardarOActualizarReporteDB(datos: any): Promise<any> {
  * Registra una acción en la tabla de auditoría de la Base de Datos.
  * Incluye las FKs al reporte y al catálogo de nodo cuando están disponibles.
  */
-export async function registrarAuditoriaDB({ chatId, messageId, remitente, accion, detalles, reporteId, catalogoNodoId }: AuditoriaPayload): Promise<void> {
+export async function registrarAuditoriaDB({
+  chatId,
+  messageId,
+  remitente,
+  accion,
+  detalles,
+  reporteId,
+  catalogoNodoId,
+}: AuditoriaPayload): Promise<void> {
   const client = obtenerClienteDB();
   if (!client) return;
 
   try {
     await client.from("logs_auditoria").insert({
-      telegram_chat_id:    chatId    ? BigInt(chatId)    : null,
+      telegram_chat_id: chatId ? BigInt(chatId) : null,
       telegram_message_id: messageId ? BigInt(messageId) : null,
       remitente,
       accion,
       detalles,
-      reporte_id:       reporteId      ?? null,  // FK → reportes_diarios.id
-      catalogo_nodo_id: catalogoNodoId ?? null,  // FK → nodos_catalogo.id
+      reporte_id: reporteId ?? null, // FK → reportes_diarios.id
+      catalogo_nodo_id: catalogoNodoId ?? null, // FK → nodos_catalogo.id
     });
   } catch (err: any) {
-    console.warn("[ADVERTENCIA] No se pudo guardar log de auditoría en la Base de Datos:", err.message);
+    console.warn(
+      "[ADVERTENCIA] No se pudo guardar log de auditoría en la Base de Datos:",
+      err.message
+    );
   }
 }
 
 /**
  * Marca un reporte como sincronizado con Google Sheets en la Base de Datos (sincronizado_sheets = true).
  */
-export async function marcarReporteSincronizadoDB(nodo: number | string, fecha: string): Promise<void> {
+export async function marcarReporteSincronizadoDB(
+  nodo: number | string,
+  fecha: string
+): Promise<void> {
   const client = obtenerClienteDB();
   if (!client) return;
 
@@ -208,19 +244,34 @@ export async function marcarReporteSincronizadoDB(nodo: number | string, fecha: 
       .eq("fecha", fechaISO);
 
     if (error) {
-      console.warn("[ADVERTENCIA] No se pudo marcar reporte como sincronizado en Base de Datos:", error.message);
+      console.warn(
+        "[ADVERTENCIA] No se pudo marcar reporte como sincronizado en Base de Datos:",
+        error.message
+      );
     } else {
-      console.log(`[INFO] Reporte marcado como sincronizado_sheets = true en BD (Nodo: ${nodo}, Fecha: ${fechaISO}).`);
+      console.log(
+        `[INFO] Reporte marcado como sincronizado_sheets = true en BD (Nodo: ${nodo}, Fecha: ${fechaISO}).`
+      );
     }
   } catch (err: any) {
-    console.warn("[ADVERTENCIA] Error al actualizar sincronizado_sheets en Base de Datos:", err.message);
+    console.warn(
+      "[ADVERTENCIA] Error al actualizar sincronizado_sheets en Base de Datos:",
+      err.message
+    );
   }
 }
 
 /**
  * Guarda o actualiza un lote de nodos del catálogo en la Base de Datos relacional.
  */
-export async function upsertCatalogoNodosDB(nodos: Array<{ municipio: string; municipioNormalizado?: string; nodo: number; limiteVerificadores?: number }>): Promise<{ guardados: number }> {
+export async function upsertCatalogoNodosDB(
+  nodos: Array<{
+    municipio: string;
+    municipioNormalizado?: string;
+    nodo: number;
+    limiteVerificadores?: number;
+  }>
+): Promise<{ guardados: number }> {
   const client = obtenerClienteDB();
   if (!client) {
     throw new Error("La base de datos relacional no está configurada");
@@ -248,7 +299,9 @@ export async function upsertCatalogoNodosDB(nodos: Array<{ municipio: string; mu
   }
 
   const cantidad = data?.length || nodos.length;
-  console.log(`[INFO] ${cantidad} nodo(s) sincronizado(s)/actualizado(s) exitosamente en la Base de Datos.`);
+  console.log(
+    `[INFO] ${cantidad} nodo(s) sincronizado(s)/actualizado(s) exitosamente en la Base de Datos.`
+  );
   return { guardados: cantidad };
 }
 
@@ -257,7 +310,12 @@ export async function upsertCatalogoNodosDB(nodos: Array<{ municipio: string; mu
  * aquellos nodos que ya no se encuentren en la lista activa suministrada.
  */
 export async function reconciliarCatalogoNodosDB(
-  nodosActivos: Array<{ municipio: string; municipioNormalizado?: string; nodo: number; limiteVerificadores?: number }>
+  nodosActivos: Array<{
+    municipio: string;
+    municipioNormalizado?: string;
+    nodo: number;
+    limiteVerificadores?: number;
+  }>
 ): Promise<{ guardados: number; eliminados: number }> {
   const client = obtenerClienteDB();
   if (!client) {
@@ -277,7 +335,10 @@ export async function reconciliarCatalogoNodosDB(
     .select("id, municipio_normalizado, nodo");
 
   if (errFetch) {
-    console.error("[ERROR] Error al consultar nodos existentes en la Base de Datos:", errFetch.message);
+    console.error(
+      "[ERROR] Error al consultar nodos existentes en la Base de Datos:",
+      errFetch.message
+    );
     return { guardados, eliminados: 0 };
   }
 
@@ -288,7 +349,8 @@ export async function reconciliarCatalogoNodosDB(
   // Claves activas provenientes de Google Sheets (municipio_normalizado + "__" + nodo)
   const clavesActivas = new Set(
     (nodosActivos || []).map(
-      (n) => `${n.municipioNormalizado || normalizarTexto(n.municipio)}__${parseInt(String(n.nodo), 10)}`
+      (n) =>
+        `${n.municipioNormalizado || normalizarTexto(n.municipio)}__${parseInt(String(n.nodo), 10)}`
     )
   );
 
@@ -301,7 +363,9 @@ export async function reconciliarCatalogoNodosDB(
     return { guardados, eliminados: 0 };
   }
 
-  console.log(`[INFO] Detectados ${idsAEliminar.length} nodo(s) obsoleto(s) a eliminar en la Base de Datos...`);
+  console.log(
+    `[INFO] Detectados ${idsAEliminar.length} nodo(s) obsoleto(s) a eliminar en la Base de Datos...`
+  );
 
   // 3. Eliminar los nodos obsoletos de Supabase
   let eliminadosCount = 0;
@@ -312,7 +376,10 @@ export async function reconciliarCatalogoNodosDB(
     .select();
 
   if (deleteErr) {
-    console.warn("[ADVERTENCIA] Falló borrado por lote de nodos obsoletos (posible FK). Intentando eliminación individual...", deleteErr.message);
+    console.warn(
+      "[ADVERTENCIA] Falló borrado por lote de nodos obsoletos (posible FK). Intentando eliminación individual...",
+      deleteErr.message
+    );
     // Fallback: Intentar borrar cada nodo individualmente para borrar todos los que no tengan restricción FK
     for (const nodoObsoleto of nodosExistentes.filter((n) => idsAEliminar.includes(n.id))) {
       const { error: errIndiv } = await client
@@ -321,7 +388,9 @@ export async function reconciliarCatalogoNodosDB(
         .eq("id", nodoObsoleto.id);
 
       if (errIndiv) {
-        console.warn(`[ADVERTENCIA] No se pudo eliminar el nodo ${nodoObsoleto.nodo} (${nodoObsoleto.municipio_normalizado}) de Supabase: tiene reportes históricos asociados (${errIndiv.message}).`);
+        console.warn(
+          `[ADVERTENCIA] No se pudo eliminar el nodo ${nodoObsoleto.nodo} (${nodoObsoleto.municipio_normalizado}) de Supabase: tiene reportes históricos asociados (${errIndiv.message}).`
+        );
       } else {
         eliminadosCount++;
       }
@@ -331,9 +400,10 @@ export async function reconciliarCatalogoNodosDB(
   }
 
   if (eliminadosCount > 0) {
-    console.log(`[INFO] ${eliminadosCount} nodo(s) obsoleto(s) eliminado(s) exitosamente de la Base de Datos.`);
+    console.log(
+      `[INFO] ${eliminadosCount} nodo(s) obsoleto(s) eliminado(s) exitosamente de la Base de Datos.`
+    );
   }
 
   return { guardados, eliminados: eliminadosCount };
 }
-

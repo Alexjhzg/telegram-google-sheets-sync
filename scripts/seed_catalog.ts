@@ -9,7 +9,9 @@ async function poblarCatalogo() {
   console.log("=== INICIANDO MIGRACIÓN/RECONCILIACIÓN DEL CATÁLOGO DE NODOS ===");
 
   if (!esDBActiva()) {
-    console.error("[ERROR] Las variables de Base de Datos (DATABASE_URL y DATABASE_KEY) no están configuradas en el archivo .env");
+    console.error(
+      "[ERROR] Las variables de Base de Datos (DATABASE_URL y DATABASE_KEY) no están configuradas en el archivo .env"
+    );
     process.exit(1);
   }
 
@@ -21,7 +23,9 @@ async function poblarCatalogo() {
       process.exit(1);
     }
 
-    console.log(`✅ ¡ÉXITO! Se actualizaron ${res.sincronizados} nodos y se eliminaron ${res.eliminados || 0} nodos obsoletos en 'nodos_catalogo'.`);
+    console.log(
+      `✅ ¡ÉXITO! Se actualizaron ${res.sincronizados} nodos y se eliminaron ${res.eliminados || 0} nodos obsoletos en 'nodos_catalogo'.`
+    );
     console.log("=== PROCESO FINALIZADO SATISFACTORIAMENTE ===");
   } catch (err) {
     console.error("[ERROR FATAL] Ocurrió un error no esperado:", err);
@@ -30,4 +34,3 @@ async function poblarCatalogo() {
 }
 
 poblarCatalogo();
-

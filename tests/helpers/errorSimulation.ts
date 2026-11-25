@@ -6,9 +6,7 @@ import { AxiosError } from "axios";
  * Creates a realistic AxiosError simulating Google Sheets API 503 "The service is currently unavailable".
  * Adheres to the exact JSON response and AxiosError signature produced by google-spreadsheet / axios.
  */
-export function createGoogle503Error(
-  message = "The service is currently unavailable"
-): AxiosError {
+export function createGoogle503Error(message = "The service is currently unavailable"): AxiosError {
   const config = {
     url: "https://sheets.googleapis.com/v4/spreadsheets/mock-sheet-id/values/A1",
     method: "GET",
@@ -45,10 +43,7 @@ export function createGoogle503Error(
  * Creates a non-transient AxiosError (e.g. 400 Bad Request, 403 Forbidden, 404 Not Found)
  * to verify that retry mechanisms fail fast on non-recoverable errors.
  */
-export function createGoogleNonTransientError(
-  status = 400,
-  message = "Bad Request"
-): AxiosError {
+export function createGoogleNonTransientError(status = 400, message = "Bad Request"): AxiosError {
   const config = {
     url: "https://sheets.googleapis.com/v4/spreadsheets/mock-sheet-id/values/A1",
     method: "POST",

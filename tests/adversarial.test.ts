@@ -1,10 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Mutex } from "../src/utils/mutex.js";
-import {
-  ejecutarConReintento,
-  esErrorReintentableGoogle,
-} from "../src/utils/retry.js";
+import { ejecutarConReintento, esErrorReintentableGoogle } from "../src/utils/retry.js";
 import {
   asegurarColumnas,
   sheetsMutex,
@@ -17,10 +14,7 @@ import {
   createGoogleNonTransientError,
   createNetworkError,
 } from "./helpers/errorSimulation.js";
-import {
-  createMockWorksheet,
-  createMockGoogleSpreadsheet,
-} from "./helpers/mockSheets.js";
+import { createMockWorksheet, createMockGoogleSpreadsheet } from "./helpers/mockSheets.js";
 import { config } from "../src/config/index.js";
 import { DatosReporteProcesar } from "../src/types/index.js";
 
@@ -56,7 +50,11 @@ test("adversarial.concurrency - 50 tareas concurrentes en Mutex garantizan FIFO 
 
   const resultados = await Promise.all(promesas);
 
-  assert.equal(maxConcurrenciaObservada, 1, "La concurrencia activa nunca debe exceder 1 (exclusión mutua)");
+  assert.equal(
+    maxConcurrenciaObservada,
+    1,
+    "La concurrencia activa nunca debe exceder 1 (exclusión mutua)"
+  );
   assert.equal(concurrenciaActiva, 0, "No debe haber tareas activas tras finalizar");
   assert.equal(ejecucionOrden.length, totalTareas, "Todas las 50 tareas deben haberse ejecutado");
 
@@ -88,7 +86,11 @@ test("adversarial.concurrency - reentrancia anidada profunda (10 niveles) sin de
   assert.equal(resultado, 10);
   assert.equal(visitados.length, 10);
   assert.deepEqual(visitados, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-  assert.equal(mutex.isLocked(), false, "El mutex debe estar desbloqueado tras resolver todos los niveles");
+  assert.equal(
+    mutex.isLocked(),
+    false,
+    "El mutex debe estar desbloqueado tras resolver todos los niveles"
+  );
 });
 
 test("adversarial.concurrency - tareas encoladas esperan a que la tarea con reentrancia anidada complete completamente", async () => {
@@ -163,7 +165,9 @@ test("adversarial.concurrency - tareas con error liberan el lock y permiten ejec
   assert.equal(resultados[0], "T1_ok");
   assert.ok(resultados[1] instanceof Error && (resultados[1] as Error).message === "T2_fallo");
   assert.equal(resultados[2], "T3_ok");
-  assert.ok(resultados[3] instanceof Error && (resultados[3] as Error).message === "T4_anidada_fallo");
+  assert.ok(
+    resultados[3] instanceof Error && (resultados[3] as Error).message === "T4_anidada_fallo"
+  );
   assert.equal(resultados[4], "T5_ok");
   assert.equal(mutex.isLocked(), false, "Mutex debe quedar completamente desbloqueado");
 });
@@ -195,7 +199,11 @@ test("adversarial.retry - errores no transitorios (400, 401, 403, 404, 422) fall
       }
     );
 
-    assert.equal(llamadas, 1, `Status ${status} debe abortar en el intento 1 sin reintentos adicionales`);
+    assert.equal(
+      llamadas,
+      1,
+      `Status ${status} debe abortar en el intento 1 sin reintentos adicionales`
+    );
   }
 });
 
@@ -221,7 +229,11 @@ test("adversarial.retry - secuencia mixta de errores (503 transitorio seguido de
     }
   );
 
-  assert.equal(llamadas, 2, "Debe ejecutar el reintento tras 503, pero detenerse inmediatamente ante 401 sin llegar al intento 3");
+  assert.equal(
+    llamadas,
+    2,
+    "Debe ejecutar el reintento tras 503, pero detenerse inmediatamente ante 401 sin llegar al intento 3"
+  );
 });
 
 test("adversarial.retry - errores de socket (ECONNRESET, ETIMEDOUT) se reintentan y recuperan", async () => {
@@ -347,7 +359,11 @@ test("adversarial.retry - verificación matemática de límites de jitter y modo
       },
     }
   );
-  assert.deepEqual(delaysExactos, [100, 200], "Sin jitter los delays deben ser exactamente 100 y 200ms");
+  assert.deepEqual(
+    delaysExactos,
+    [100, 200],
+    "Sin jitter los delays deben ser exactamente 100 y 200ms"
+  );
 });
 
 test("adversarial.retry - detector identifica error transitorio anidado en Error.cause", () => {
@@ -356,7 +372,11 @@ test("adversarial.retry - detector identifica error transitorio anidado en Error
   (outerError as any).cause = innerError;
 
   const esReintentable = esErrorReintentableGoogle(outerError);
-  assert.equal(esReintentable, true, "Debe inspeccionar recursivamente la propiedad cause y detectar 503");
+  assert.equal(
+    esReintentable,
+    true,
+    "Debe inspeccionar recursivamente la propiedad cause y detectar 503"
+  );
 });
 
 test("adversarial.retry - comportamiento ante ciclo de referencias circulares en Error.cause (Finding #1)", () => {
@@ -439,7 +459,7 @@ test("adversarial.sheets - asegurarColumnas se recupera ante 503s intermitentes 
   const mockHoja = createMockWorksheet({
     headers: ["Municipio", "Nodo"],
     failAttemptsOnLoadHeader: 1, // Falla 1 vez en lectura, recupera al 2do
-    failAttemptsOnSetHeader: 1,  // Falla 1 vez en escritura, recupera al 2do
+    failAttemptsOnSetHeader: 1, // Falla 1 vez en escritura, recupera al 2do
   });
 
   await asegurarColumnas(mockHoja as any);
@@ -452,7 +472,10 @@ test("adversarial.sheets - asegurarColumnas se recupera ante 503s intermitentes 
 test("adversarial.sheets - asegurarColumnas falla inmediatamente sin reintentar ante 404 Not Found en loadHeaderRow", async () => {
   const mockHoja = createMockWorksheet({
     headers: ["Municipio", "Nodo"],
-    errorToThrowOnLoadHeader: createGoogleNonTransientError(404, "Spreadsheet or Worksheet Not Found"),
+    errorToThrowOnLoadHeader: createGoogleNonTransientError(
+      404,
+      "Spreadsheet or Worksheet Not Found"
+    ),
     failAttemptsOnLoadHeader: 5,
   });
 
@@ -467,7 +490,11 @@ test("adversarial.sheets - asegurarColumnas falla inmediatamente sin reintentar 
   );
 
   assert.equal(mockHoja.stats.loadHeaderCalls, 1, "No debe reintentar 404");
-  assert.equal(mockHoja.stats.setHeaderCalls, 0, "No debe intentar escribir si la lectura falló por 404");
+  assert.equal(
+    mockHoja.stats.setHeaderCalls,
+    0,
+    "No debe intentar escribir si la lectura falló por 404"
+  );
 });
 
 // ============================================================================
@@ -542,7 +569,11 @@ test("adversarial.reportProcessor - 10 reportes concurrentes procesados a travé
       assert.equal(r.valido, true, "Cada reporte concurrente debe procesarse válidamente");
     }
 
-    assert.equal(unhandledRejections, 0, "No debe producirse ningún unhandledRejection durante ejecución concurrente");
+    assert.equal(
+      unhandledRejections,
+      0,
+      "No debe producirse ningún unhandledRejection durante ejecución concurrente"
+    );
     assert.equal(sheetsMutex.isLocked(), false, "sheetsMutex debe quedar libre");
   } finally {
     process.removeListener("unhandledRejection", rejectionHandler);

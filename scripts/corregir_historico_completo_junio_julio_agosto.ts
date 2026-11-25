@@ -21,7 +21,7 @@ async function corregirHistoricoCompleto() {
         startRowIndex: 0,
         endRowIndex: rows.length + 5,
         startColumnIndex: 6,
-        endColumnIndex: 7
+        endColumnIndex: 7,
       });
 
       const conteoCorregidas: Record<string, number> = {};
@@ -78,7 +78,6 @@ async function corregirHistoricoCompleto() {
       }
 
       console.log(`\n✅ ¡ÉXITO! Total de filas corregidas: ${totalCorregidas}`);
-
     } catch (err: any) {
       console.error("❌ Error durante la corrección:", err.message || err);
     }

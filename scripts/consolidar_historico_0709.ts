@@ -44,9 +44,11 @@ async function consolidarHistorico0709Batch() {
 
       // 2. Obtener filas del histórico en Google Sheets para '07/09/2026'
       const filas = await sheetHistorica.getRows();
-      console.log(`[INFO] Total de filas actuales en 'registros_historicos_telegram': ${filas.length}`);
+      console.log(
+        `[INFO] Total de filas actuales en 'registros_historicos_telegram': ${filas.length}`
+      );
 
-      const filas0709 = filas.filter(f => (f.get(COLUMNAS.FECHA) || "").trim() === "07/09/2026");
+      const filas0709 = filas.filter((f) => (f.get(COLUMNAS.FECHA) || "").trim() === "07/09/2026");
       console.log(`[INFO] Filas encontradas con fecha '07/09/2026': ${filas0709.length}`);
 
       if (filas0709.length === 0) {
@@ -55,15 +57,17 @@ async function consolidarHistorico0709Batch() {
       }
 
       // 3. Cargar celdas del bloque '07/09/2026' en lote
-      const minRowIndex = Math.min(...filas0709.map(f => f.rowNumber - 1));
-      const maxRowIndex = Math.max(...filas0709.map(f => f.rowNumber - 1));
+      const minRowIndex = Math.min(...filas0709.map((f) => f.rowNumber - 1));
+      const maxRowIndex = Math.max(...filas0709.map((f) => f.rowNumber - 1));
 
-      console.log(`[INFO] Cargando celdas desde fila ${minRowIndex + 1} hasta ${maxRowIndex + 1}...`);
+      console.log(
+        `[INFO] Cargando celdas desde fila ${minRowIndex + 1} hasta ${maxRowIndex + 1}...`
+      );
       await sheetHistorica.loadCells({
         startRowIndex: minRowIndex,
         endRowIndex: maxRowIndex + 1,
         startColumnIndex: 0,
-        endColumnIndex: 12
+        endColumnIndex: 12,
       });
 
       // Mapeo de cabeceras a índices de columna
@@ -103,7 +107,8 @@ async function consolidarHistorico0709Batch() {
           if (colIdx.b1 >= 0) sheetHistorica.getCell(rowIndex, colIdx.b1).value = b1;
           if (colIdx.b2 >= 0) sheetHistorica.getCell(rowIndex, colIdx.b2).value = b2;
           if (colIdx.b3 >= 0) sheetHistorica.getCell(rowIndex, colIdx.b3).value = b3;
-          if (colIdx.fecha >= 0) sheetHistorica.getCell(rowIndex, colIdx.fecha).value = "07/09/2026";
+          if (colIdx.fecha >= 0)
+            sheetHistorica.getCell(rowIndex, colIdx.fecha).value = "07/09/2026";
           if (colIdx.hora >= 0) sheetHistorica.getCell(rowIndex, colIdx.hora).value = hora;
           if (colIdx.rem >= 0) sheetHistorica.getCell(rowIndex, colIdx.rem).value = remitente;
           if (colIdx.msgId >= 0) sheetHistorica.getCell(rowIndex, colIdx.msgId).value = msgId;
@@ -113,10 +118,11 @@ async function consolidarHistorico0709Batch() {
         }
       }
 
-      console.log(`[INFO] Guardando celdas actualizadas para ${actualizados} nodos en 1 sólo request batch...`);
+      console.log(
+        `[INFO] Guardando celdas actualizadas para ${actualizados} nodos en 1 sólo request batch...`
+      );
       await sheetHistorica.saveUpdatedCells();
       console.log("[ÉXITO] Bloque '07/09/2026' consolidado y guardado en lote con éxito.");
-
     } catch (err: any) {
       console.error("❌ Error durante la consolidación batch:", err.message || err);
     }

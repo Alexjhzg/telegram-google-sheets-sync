@@ -43,7 +43,9 @@ async function estandarizarFechasHistoricas() {
           const fechaNormalizada = estandarizarFecha(fechaOriginal);
 
           if (!fechaNormalizada) {
-            console.warn(`[ADVERTENCIA] Fila ${i + 2}: No se pudo interpretar la fecha '${fechaOriginal}'.`);
+            console.warn(
+              `[ADVERTENCIA] Fila ${i + 2}: No se pudo interpretar la fecha '${fechaOriginal}'.`
+            );
             errores++;
             continue;
           }
@@ -75,20 +77,30 @@ async function estandarizarFechasHistoricas() {
 
         if (rawI1) {
           const fechaEstandarI1 = estandarizarFecha(rawI1);
-          if (fechaEstandarI1 && (cellI1.value !== fechaEstandarI1 || cellI1.formattedValue !== fechaEstandarI1)) {
-            console.log(`[ACTUALIZANDO] Celda I1 en 'reporte_nodo': '${rawI1}' ➔ '${fechaEstandarI1}'`);
+          if (
+            fechaEstandarI1 &&
+            (cellI1.value !== fechaEstandarI1 || cellI1.formattedValue !== fechaEstandarI1)
+          ) {
+            console.log(
+              `[ACTUALIZANDO] Celda I1 en 'reporte_nodo': '${rawI1}' ➔ '${fechaEstandarI1}'`
+            );
             cellI1.value = fechaEstandarI1;
             cellI1.numberFormat = { type: "TEXT", pattern: "@" };
             await hojaReporteNodo.saveUpdatedCells();
           } else {
-            console.log(`[INFO] Celda I1 en 'reporte_nodo' ya se encuentra en formato estándar: '${cellI1.formattedValue || cellI1.value}'`);
+            console.log(
+              `[INFO] Celda I1 en 'reporte_nodo' ya se encuentra en formato estándar: '${cellI1.formattedValue || cellI1.value}'`
+            );
           }
         }
       }
 
       console.log("\n=== ESTANDARIZACIÓN DE FECHAS FINALIZADA CON ÉXITO ===");
     } catch (err: any) {
-      console.error("[ERROR] Falló la ejecución del script de estandarización:", err?.message || err);
+      console.error(
+        "[ERROR] Falló la ejecución del script de estandarización:",
+        err?.message || err
+      );
       process.exit(1);
     }
   });

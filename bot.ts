@@ -3,13 +3,10 @@ import http from "node:http";
 import { Bot } from "grammy";
 import { registrarHandlers } from "./src/handlers/message.js";
 import { programarLimpieza } from "./src/jobs/cleanup.js";
-import {
-  obtenerHojaDeCalculo,
-  resetearFilasDeDiasAnteriores
-} from "./src/services/sheets.js";
+import { obtenerHojaDeCalculo, resetearFilasDeDiasAnteriores } from "./src/services/sheets.js";
 import {
   inicializarHojaConNodos,
-  ordenarYLimpiarHojaPrincipal
+  ordenarYLimpiarHojaPrincipal,
 } from "./src/services/sheets.business.js";
 import { sincronizarCatalogoDesdeSheets } from "./src/services/catalogService.js";
 
@@ -36,11 +33,13 @@ const PORT = process.env.PORT || 8080;
 const server = http.createServer((req, res) => {
   if (req.url === "/" || req.url === "/healthz") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      status: "ok",
-      uptime: Math.round(process.uptime()),
-      message: "Bot de supervisión en campo activo y escuchando."
-    }));
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        uptime: Math.round(process.uptime()),
+        message: "Bot de supervisión en campo activo y escuchando.",
+      })
+    );
   } else {
     res.writeHead(404, { "Content-Type": "text/plain" });
     res.end("Not Found");
@@ -52,7 +51,9 @@ server.on("error", (err) => {
 });
 
 server.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`[INFO] Servidor HTTP escuchando en el puerto ${PORT} (Requerido para despliegues en Render Web Services).`);
+  console.log(
+    `[INFO] Servidor HTTP escuchando en el puerto ${PORT} (Requerido para despliegues en Render Web Services).`
+  );
 });
 
 // Apagado limpio y coordinado (SIGTERM y SIGINT) para Render
@@ -60,7 +61,9 @@ let isShuttingDown = false;
 async function detenerServicio(origen: string, codigoSalida: number = 0) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[INFO] Señal de apagado recibida (${origen}). Cerrando bot y servidor HTTP de forma limpia...`);
+  console.log(
+    `[INFO] Señal de apagado recibida (${origen}). Cerrando bot y servidor HTTP de forma limpia...`
+  );
 
   try {
     server.close(() => {
@@ -100,7 +103,10 @@ async function iniciarBot(): Promise<void> {
             await ordenarYLimpiarHojaPrincipal(doc);
             await sincronizarCatalogoDesdeSheets();
           } catch (err) {
-            console.error("[ERROR] Fallo al inicializar, limpiar y ordenar la hoja de cálculo o sincronizar catálogo:", err);
+            console.error(
+              "[ERROR] Fallo al inicializar, limpiar y ordenar la hoja de cálculo o sincronizar catálogo:",
+              err
+            );
           }
 
           try {
@@ -124,7 +130,9 @@ async function iniciarBot(): Promise<void> {
 
     const delayMs = esConflicto409 ? 10000 : 5000;
     if (esConflicto409) {
-      console.warn(`[CONFLICTO 409] Hay otra instancia activa o la sesión previa de Telegram aún no se cerró. Reintentando en ${delayMs / 1000}s...`);
+      console.warn(
+        `[CONFLICTO 409] Hay otra instancia activa o la sesión previa de Telegram aún no se cerró. Reintentando en ${delayMs / 1000}s...`
+      );
     } else {
       console.warn(`[RETRY] Reintentando conexión con Telegram en ${delayMs / 1000}s...`);
     }

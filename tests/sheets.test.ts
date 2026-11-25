@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizarTexto, buscarFilaPorNodo, obtenerUltimosValores } from "../src/services/sheets.js";
+import {
+  normalizarTexto,
+  buscarFilaPorNodo,
+  obtenerUltimosValores,
+} from "../src/services/sheets.js";
 
 test("sheets - normalizarTexto elimina tildes, mayúsculas y espacios extra", () => {
   assert.equal(normalizarTexto("Maturín"), "maturin");

@@ -24,11 +24,15 @@ export async function validarMunicipioNodo(
 
   const filasNodos = await hojaNodos.getRows();
 
-  const filaMunicipio = filasNodos.find(fila => normalizarTexto(fila.get("MUNICIPIO")) === municipioNormalizado);
+  const filaMunicipio = filasNodos.find(
+    (fila) => normalizarTexto(fila.get("MUNICIPIO")) === municipioNormalizado
+  );
   const municipioExiste = !!filaMunicipio;
-  const municipioOficialDetectado = filaMunicipio ? (filaMunicipio.get("MUNICIPIO") || "").trim() : municipio;
+  const municipioOficialDetectado = filaMunicipio
+    ? (filaMunicipio.get("MUNICIPIO") || "").trim()
+    : municipio;
 
-  const registroOficial = filasNodos.find(fila => {
+  const registroOficial = filasNodos.find((fila) => {
     const mun = normalizarTexto(fila.get("MUNICIPIO"));
     const nod = parseInt(fila.get("NODO") || "0", 10);
     return mun === municipioNormalizado && nod === nodo;
@@ -36,9 +40,19 @@ export async function validarMunicipioNodo(
 
   if (!registroOficial) {
     if (!municipioExiste) {
-      return { valido: false, razon: "MUNICIPIO_INCORRECTO", limiteVerificadores: 0, municipioOficial: municipio };
+      return {
+        valido: false,
+        razon: "MUNICIPIO_INCORRECTO",
+        limiteVerificadores: 0,
+        municipioOficial: municipio,
+      };
     } else {
-      return { valido: false, razon: "NODO_INCORRECTO", limiteVerificadores: 0, municipioOficial: municipioOficialDetectado };
+      return {
+        valido: false,
+        razon: "NODO_INCORRECTO",
+        limiteVerificadores: 0,
+        municipioOficial: municipioOficialDetectado,
+      };
     }
   }
 

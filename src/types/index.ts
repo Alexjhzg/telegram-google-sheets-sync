@@ -46,7 +46,7 @@ export interface ResultadoAcumulacion {
 }
 
 export interface NodoCatalogo {
-  id?: string;                     // UUID de la fila en nodos_catalogo (pk)
+  id?: string; // UUID de la fila en nodos_catalogo (pk)
   municipio: string;
   municipioNormalizado?: string;
   municipio_normalizado?: string;
@@ -80,8 +80,8 @@ export interface AuditoriaPayload {
   remitente: string;
   accion: string;
   detalles: any;
-  reporteId?: string | null;       // UUID FK → reportes_diarios.id
-  catalogoNodoId?: string | null;  // UUID FK → nodos_catalogo.id
+  reporteId?: string | null; // UUID FK → reportes_diarios.id
+  catalogoNodoId?: string | null; // UUID FK → nodos_catalogo.id
 }
 
 export interface DatosReporteProcesar {

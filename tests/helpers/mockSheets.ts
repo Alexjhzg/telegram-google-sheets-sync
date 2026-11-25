@@ -82,7 +82,9 @@ export function createMockWorksheet(options: MockWorksheetOptions = {}) {
     stats.saveCalls++;
     if (failSave > 0) {
       failSave--;
-      throw options.errorToThrowOnSave ?? createGoogle503Error("503 Service Unavailable: row.save()");
+      throw (
+        options.errorToThrowOnSave ?? createGoogle503Error("503 Service Unavailable: row.save()")
+      );
     }
   };
 
@@ -102,7 +104,9 @@ export function createMockWorksheet(options: MockWorksheetOptions = {}) {
         if (staged[col] !== undefined) {
           return staged[col] !== null ? String(staged[col]) : "";
         }
-        return record.data[col] !== undefined && record.data[col] !== null ? String(record.data[col]) : "";
+        return record.data[col] !== undefined && record.data[col] !== null
+          ? String(record.data[col])
+          : "";
       },
       set(col: string, val: any): void {
         staged[col] = val !== undefined && val !== null ? String(val) : "";
@@ -170,8 +174,7 @@ export function createMockWorksheet(options: MockWorksheetOptions = {}) {
       if (failAddRow > 0) {
         failAddRow--;
         throw (
-          options.errorToThrowOnAddRow ??
-          createGoogle503Error("503 Service Unavailable: addRow()")
+          options.errorToThrowOnAddRow ?? createGoogle503Error("503 Service Unavailable: addRow()")
         );
       }
       const newRecord: RowRecord = {

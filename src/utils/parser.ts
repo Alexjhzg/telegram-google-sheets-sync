@@ -11,31 +11,38 @@ import { ReporteParseado, TiempoConvertido, BloqueInfo } from "../types/index.js
  * @param texto - Texto del mensaje de Telegram.
  * @returns Reporte parseado o null si falta municipio o nodo.
  */
-export function parsearReporte(texto: string): (ReporteParseado & { bloque1: number | null; bloque2: number | null; bloque3: number | null }) | null {
-  const regexMunicipio = /(?:Municipio|municipio)\*?\s*:\*?\s*([^*️\r\n\t]+)/i;
-  const regexNodo      = /(?:Nodo|nodo)\*?\s*:\*?\s*(\d+)/i;
-  const regexTotal     = /(?:Total\s*(?:de)?\s*Verificadores(?:\s*en\s*el\s*nodo)?)\*?\s*:\*?\s*(\d+)/i;
+export function parsearReporte(
+  texto: string
+):
+  | (ReporteParseado & { bloque1: number | null; bloque2: number | null; bloque3: number | null })
+  | null {
+  const regexMunicipio = /(?:Municipio|municipio)\*?\s*:\*?\s*([^*\r\n\t]+)/i;
+  const regexNodo = /(?:Nodo|nodo)\*?\s*:\*?\s*(\d+)/i;
+  const regexTotal = /(?:Total\s*(?:de)?\s*Verificadores(?:\s*en\s*el\s*nodo)?)\*?\s*:\*?\s*(\d+)/i;
 
-  const regexBloque1   = /9\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?\s*[,.]?\s*(\d+)?[\)\]\}]?/i;
-  const regexBloque2   = /2\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?\s*[,.]?\s*(\d+)?[\)\]\}]?/i;
-  const regexBloque3   = /6\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?\s*[,.]?\s*(\d+)?[\)\]\}]?/i;
+  const regexBloque1 =
+    /9\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?\s*[,.]?\s*(\d+)?[\)\]\}]?/i;
+  const regexBloque2 =
+    /2\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?\s*[,.]?\s*(\d+)?[\)\]\}]?/i;
+  const regexBloque3 =
+    /6\s*(?:a\.?m\.?|p\.?m\.?)\*?\s*[:\-=\s]?\*?\s*[\(\[\{]?\s*[,.]?\s*(\d+)?[\)\]\}]?/i;
 
   const matchMunicipio = regexMunicipio.exec(texto);
-  const matchNodo      = regexNodo.exec(texto);
-  const matchTotal     = regexTotal.exec(texto);
-  const matchB1        = regexBloque1.exec(texto);
-  const matchB2        = regexBloque2.exec(texto);
-  const matchB3        = regexBloque3.exec(texto);
+  const matchNodo = regexNodo.exec(texto);
+  const matchTotal = regexTotal.exec(texto);
+  const matchB1 = regexBloque1.exec(texto);
+  const matchB2 = regexBloque2.exec(texto);
+  const matchB3 = regexBloque3.exec(texto);
 
   if (!matchMunicipio || !matchNodo) return null;
 
   return {
-    municipio:          matchMunicipio[1].trim(),
-    nodo:               parseInt(matchNodo[1], 10),
+    municipio: matchMunicipio[1].replace(/\uFE0F/g, "").trim(),
+    nodo: parseInt(matchNodo[1], 10),
     totalVerificadores: matchTotal ? parseInt(matchTotal[1], 10) : 0,
-    bloque1:            matchB1 ? ((matchB1[1] !== undefined) ? parseInt(matchB1[1], 10) : 0) : null,
-    bloque2:            matchB2 ? ((matchB2[1] !== undefined) ? parseInt(matchB2[1], 10) : 0) : null,
-    bloque3:            matchB3 ? ((matchB3[1] !== undefined) ? parseInt(matchB3[1], 10) : 0) : null,
+    bloque1: matchB1 ? (matchB1[1] !== undefined ? parseInt(matchB1[1], 10) : 0) : null,
+    bloque2: matchB2 ? (matchB2[1] !== undefined ? parseInt(matchB2[1], 10) : 0) : null,
+    bloque3: matchB3 ? (matchB3[1] !== undefined ? parseInt(matchB3[1], 10) : 0) : null,
   };
 }
 
@@ -63,7 +70,7 @@ export function convertirTimestamp(timestamp: number): TiempoConvertido {
 
   return {
     fecha: formatterFecha.format(dateObj),
-    hora:  formatterHora.format(dateObj),
+    hora: formatterHora.format(dateObj),
   };
 }
 
@@ -105,7 +112,14 @@ export function obtenerBloqueYHoraActivo(timestamp: number): BloqueInfo {
   }
 
   const horaStr = `${String(hourVE).padStart(2, "0")}:${String(minuteVE).padStart(2, "0")}`;
-  const bloqueStr = bloqueActivo === 1 ? "9am" : bloqueActivo === 2 ? "2pm" : bloqueActivo === 3 ? "6pm" : "Cerrado";
+  const bloqueStr =
+    bloqueActivo === 1
+      ? "9am"
+      : bloqueActivo === 2
+        ? "2pm"
+        : bloqueActivo === 3
+          ? "6pm"
+          : "Cerrado";
 
   return { horaStr, bloqueActivo, bloqueStr, minutosDelDia };
 }

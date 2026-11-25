@@ -12,7 +12,12 @@ import { ReporteParseado, HistorialAcumulado, ResultadoAcumulacion } from "../ty
  */
 export function calcularAcumulacion(
   bloqueActivo: number,
-  reporte: Partial<ReporteParseado> & { totalVerificadores?: number; bloque1?: number | null; bloque2?: number | null; bloque3?: number | null },
+  reporte: Partial<ReporteParseado> & {
+    totalVerificadores?: number;
+    bloque1?: number | null;
+    bloque2?: number | null;
+    bloque3?: number | null;
+  },
   historial: HistorialAcumulado
 ): ResultadoAcumulacion {
   const { totalVerificadores, bloque1, bloque2, bloque3 } = reporte;
@@ -23,9 +28,10 @@ export function calcularAcumulacion(
   const b3Msg = bloque3 !== null && bloque3 !== undefined ? bloque3 : 0;
 
   // Identificar si el supervisor proveyó la estructura explícita de bloques en el mensaje
-  const tieneEstructuraBloques = (bloque1 !== null && bloque1 !== undefined) ||
-                                 (bloque2 !== null && bloque2 !== undefined) ||
-                                 (bloque3 !== null && bloque3 !== undefined);
+  const tieneEstructuraBloques =
+    (bloque1 !== null && bloque1 !== undefined) ||
+    (bloque2 !== null && bloque2 !== undefined) ||
+    (bloque3 !== null && bloque3 !== undefined);
 
   // Inicializar acumulaciones finales con los valores históricos
   let b1Final = historial.b1;

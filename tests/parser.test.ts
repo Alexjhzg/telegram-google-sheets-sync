@@ -56,4 +56,3 @@ test("parser - obtenerBloqueYHoraActivo determina correctamente bloques según h
   assert.equal(info530am.bloqueActivo, 0);
   assert.equal(info530am.bloqueStr, "Cerrado");
 });
-

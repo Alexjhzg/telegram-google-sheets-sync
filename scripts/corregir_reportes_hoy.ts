@@ -1,4 +1,9 @@
-import { obtenerHojaDeCalculo, buscarFilaPorNodo, COLUMNAS, sheetsMutex } from "../src/services/sheets.js";
+import {
+  obtenerHojaDeCalculo,
+  buscarFilaPorNodo,
+  COLUMNAS,
+  sheetsMutex,
+} from "../src/services/sheets.js";
 import { esDBActiva, guardarOActualizarReporteDB } from "../src/services/database.js";
 
 export interface ReporteAjuste {
@@ -124,7 +129,9 @@ async function ejecutar() {
     for (const rep of REPORTES_RECUPERADOS) {
       const fila = buscarFilaPorNodo(filas, rep.municipio, rep.nodo);
       if (!fila) {
-        console.warn(`[ADVERTENCIA] No se encontró fila fija para Municipio: ${rep.municipio}, Nodo: ${rep.nodo}`);
+        console.warn(
+          `[ADVERTENCIA] No se encontró fila fija para Municipio: ${rep.municipio}, Nodo: ${rep.nodo}`
+        );
         noEncontrados++;
         continue;
       }
@@ -141,7 +148,9 @@ async function ejecutar() {
       await fila.save();
       actualizados++;
 
-      console.log(`[OK] Nodo ${rep.nodo} (${rep.municipio}) actualizado: B1=${rep.b1}, B2=${rep.b2}, B3=${rep.b3}, Total=${rep.total}`);
+      console.log(
+        `[OK] Nodo ${rep.nodo} (${rep.municipio}) actualizado: B1=${rep.b1}, B2=${rep.b2}, B3=${rep.b3}, Total=${rep.total}`
+      );
 
       if (esDBActiva()) {
         try {

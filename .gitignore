@@ -59,4 +59,17 @@ scripts/probar_clear_j.ts
 scripts/probar_formula_reporto.ts
 scripts/aplicar_formula_reporto.ts
 
+# Artefactos de compilación, caché de linters y cobertura
+dist/
+coverage/
+.eslintcache
+
+# Scripts desechables y archivos de datos operativos locales
+scratch/
+*.xlsx
+
+# Artefactos temporales de ejecuciones de Teamwork
+.agents/teamwork/
+
+
 

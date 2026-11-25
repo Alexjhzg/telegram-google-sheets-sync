@@ -25,9 +25,7 @@ export function obtenerNombreRemitente(ctx: Context): string {
   }
 
   return (
-    [from?.first_name, from?.last_name].filter(Boolean).join(" ") ||
-    from?.username ||
-    "Desconocido"
+    [from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "Desconocido"
   );
 }
 
@@ -43,7 +41,9 @@ export async function reaccionar(ctx: Context, emoji: string): Promise<void> {
     await ctx.react(emoji as any);
     console.log(`[INFO] Reacción con '${emoji}' añadida al mensaje ID: ${messageId}`);
   } catch (error: any) {
-    console.warn(`[ADVERTENCIA] No se pudo reaccionar con '${emoji}' al mensaje ID ${messageId}: ${error.message}`);
+    console.warn(
+      `[ADVERTENCIA] No se pudo reaccionar con '${emoji}' al mensaje ID ${messageId}: ${error.message}`
+    );
   }
 }
 

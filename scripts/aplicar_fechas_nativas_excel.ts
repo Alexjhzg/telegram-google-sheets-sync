@@ -47,7 +47,9 @@ async function aplicarFechasNativasExcel() {
         }
       }
       await hojaHistorico.saveUpdatedCells();
-      console.log(`[INFO] Se convirtieron ${convHist} filas en 'registros_historicos_telegram' a fecha nativa.`);
+      console.log(
+        `[INFO] Se convirtieron ${convHist} filas en 'registros_historicos_telegram' a fecha nativa.`
+      );
 
       // 2. Convertir fechas en 'registros_telegram'
       if (hojaTelegram) {
@@ -79,7 +81,9 @@ async function aplicarFechasNativasExcel() {
           }
         }
         await hojaTelegram.saveUpdatedCells();
-        console.log(`[INFO] Se convirtieron ${convTel} filas en 'registros_telegram' a fecha nativa.`);
+        console.log(
+          `[INFO] Se convirtieron ${convTel} filas en 'registros_telegram' a fecha nativa.`
+        );
       }
 
       // 3. Ajustar I1 y las fórmulas de 'reporte_nodo'
@@ -123,7 +127,6 @@ async function aplicarFechasNativasExcel() {
         if (!isNaN(valD)) sumaD += valD;
       }
       console.log(`Suma total de verificadores en campo: ${sumaD}`);
-
     } catch (err: any) {
       console.error("Error aplicando fechas nativas:", err);
     }

@@ -83,7 +83,6 @@ async function restaurarFechasEstandar() {
         if (!isNaN(valD)) sumaD += valD;
       }
       console.log(`Suma total de verificadores en campo: ${sumaD}`);
-
     } catch (err: any) {
       console.error("Error al restaurar:", err);
     }

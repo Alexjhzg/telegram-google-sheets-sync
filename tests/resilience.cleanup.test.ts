@@ -47,7 +47,11 @@ test("resilience.cleanup - contención de errores por fila: fila 1 falla con 503
 
   // Configurar falla permanente 503 exclusivamente para la primera fila que procesará el bucle reverso
   // ejecutarLimpieza itera desde filas.length - 1 hacia 0 (índice 2: rowNumber 4, ID 1003)
-  hojaTelegram.setRowSaveFailure(2, 10, createGoogle503Error("503 Service Unavailable en fila 1003"));
+  hojaTelegram.setRowSaveFailure(
+    2,
+    10,
+    createGoogle503Error("503 Service Unavailable en fila 1003")
+  );
 
   const mockDoc = createMockGoogleSpreadsheet({
     registros_telegram: hojaTelegram,
@@ -69,18 +73,30 @@ test("resilience.cleanup - contención de errores por fila: fila 1 falla con 503
     // La fila con falla 503 (ID 1003) no pudo resetearse, pero NO abortó el ciclo
     const filaFalla = filasFinales.find((f) => f.get(COLUMNAS.ID_MENSAJE) === "1003");
     assert.ok(filaFalla, "La fila que falló debe existir");
-    assert.equal(filaFalla.get(COLUMNAS.TOTAL_VERIFICADORES), "1", "La fila con 503 mantuvo su valor previo");
+    assert.equal(
+      filaFalla.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "1",
+      "La fila con 503 mantuvo su valor previo"
+    );
 
     // Las otras dos filas (ID 1001 e ID 1002) debieron ser analizadas y reseteadas exitosamente
     const fila2 = filasFinales.find((f) => f.get(COLUMNAS.NODO) === "16039");
     const fila3 = filasFinales.find((f) => f.get(COLUMNAS.NODO) === "16040");
 
     assert.ok(fila2, "La fila 16039 debe existir");
-    assert.equal(fila2.get(COLUMNAS.TOTAL_VERIFICADORES), "0", "La fila 16039 debió resetearse a 0");
+    assert.equal(
+      fila2.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "0",
+      "La fila 16039 debió resetearse a 0"
+    );
     assert.equal(fila2.get(COLUMNAS.ESTADO), "", "El estado de 16039 debió limpiarse");
 
     assert.ok(fila3, "La fila 16040 debe existir");
-    assert.equal(fila3.get(COLUMNAS.TOTAL_VERIFICADORES), "0", "La fila 16040 debió resetearse a 0");
+    assert.equal(
+      fila3.get(COLUMNAS.TOTAL_VERIFICADORES),
+      "0",
+      "La fila 16040 debió resetearse a 0"
+    );
     assert.equal(fila3.get(COLUMNAS.ESTADO), "", "El estado de 16040 debió limpiarse");
   } finally {
     setHojaDeCalculoProviderForTesting(null);

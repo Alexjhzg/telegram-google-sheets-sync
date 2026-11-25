@@ -21,7 +21,7 @@ async function corregirFechasSeptiembreBatch() {
           startRowIndex: 0,
           endRowIndex: totalRowsHist,
           startColumnIndex: 6,
-          endColumnIndex: 7
+          endColumnIndex: 7,
         });
 
         let corregidas04 = 0;
@@ -98,7 +98,7 @@ async function corregirFechasSeptiembreBatch() {
           startRowIndex: 0,
           endRowIndex: totalRowsDiario,
           startColumnIndex: 6,
-          endColumnIndex: 7
+          endColumnIndex: 7,
         });
 
         let corregidasDiarias = 0;
@@ -116,11 +116,12 @@ async function corregirFechasSeptiembreBatch() {
 
         console.log(`[INFO] Guardando celdas en 'registros_telegram'...`);
         await sheetDiario.saveUpdatedCells();
-        console.log(`✅ Resultado en 'registros_telegram': ${corregidasDiarias} celdas del 07/09 estandarizadas a texto '07/09/2026'.`);
+        console.log(
+          `✅ Resultado en 'registros_telegram': ${corregidasDiarias} celdas del 07/09 estandarizadas a texto '07/09/2026'.`
+        );
       }
 
       console.log("\n🎉 CONSOLIDADACIÓN Y CORRECCIÓN COMPLETADA CON ÉXITO.");
-
     } catch (err: any) {
       console.error("❌ Error al corregir fechas:", err.message || err);
       process.exit(1);
